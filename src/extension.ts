@@ -1,15 +1,17 @@
 import * as vscode from 'vscode'
+import { scanForDeprecated } from './core/scanner/deprecatedScanner'
 
 export function activate(context: vscode.ExtensionContext) {
-  console.log(
-    'Congratulations, your extension "deprecated-finder" is now active!'
-  )
+  console.log('Deprecated Finder activated')
+
   const disposable = vscode.commands.registerCommand(
     'deprecatedFinder.open',
-    () => {
-      vscode.window.showInformationMessage('Deprecated Finder is now active!')
+    async () => {
+      await scanForDeprecated()
     }
   )
 
   context.subscriptions.push(disposable)
 }
+
+export function deactivate() {}
