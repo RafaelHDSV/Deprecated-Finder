@@ -11,27 +11,35 @@ export function scanFileForDeprecated(
   const deprecatedItems: DeprecatedItem[] = []
 
   function visit(node: ts.Node) {
+    if (!ts.isIdentifier(node)) {
+      ts.forEachChild(node, visit)
+      return
+    }
+
     const symbol = checker.getSymbolAtLocation(node)
+    if (!symbol) return
 
-    if (symbol) {
-      const tags = symbol.getJsDocTags()
-      const deprecatedTag = tags.find((tag) => tag.name === 'deprecated')
+    const declarations = symbol.getDeclarations() ?? []
 
-      if (deprecatedTag) {
-        const { line, character } = sourceFile.getLineAndCharacterOfPosition(
-          node.getStart()
-        )
+    const isDeprecated = declarations.some((decl) => {
+      const jsDocTags = ts.getJSDocTags(decl)
+      return jsDocTags.some((tag) => tag.tagName.text === 'deprecated')
+    })
 
-        deprecatedItems.push({
-          id: `${symbol.getName()}-${line}-${character}`,
-          name: symbol.getName(),
-          filePath,
-          line: line + 1,
-          column: character + 1,
-          message: deprecatedTag.text?.map((t) => t.text).join(' '),
-          source: 'typescript'
-        })
-      }
+    if (isDeprecated) {
+      const { line, character } = sourceFile.getLineAndCharacterOfPosition(
+        node.getStart()
+      )
+
+      deprecatedItems.push({
+        id: `${symbol.getName()}-${sourceFile.fileName}-${line}-${character}`,
+        name: symbol.getName(),
+        filePath,
+        line: line + 1,
+        column: character + 1,
+        message: 'This API is deprecated',
+        source: 'typescript'
+      })
     }
 
     ts.forEachChild(node, visit)
