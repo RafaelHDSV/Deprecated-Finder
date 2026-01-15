@@ -15,6 +15,15 @@ export class DeprecatedViewProvider implements vscode.WebviewViewProvider {
       enableScripts: true
     }
 
+    // Executa o escaneamento ao abrir a aba
+    import('../core/scanner/deprecatedScanner').then(
+      ({ scanForDeprecated }) => {
+        scanForDeprecated().then(() => {
+          this.refresh()
+        })
+      }
+    )
+
     webviewView.webview.html = this.getHtml()
 
     webviewView.webview.onDidReceiveMessage((message) => {
