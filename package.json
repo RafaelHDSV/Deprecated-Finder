@@ -16,9 +16,6 @@
   "categories": [
     "Other"
   ],
-  "activationEvents": [
-    "onCommand:deprecatedFinder.open"
-  ],
   "main": "./out/extension.js",
   "contributes": {
     "commands": [
@@ -26,7 +23,25 @@
         "command": "deprecatedFinder.open",
         "title": "Deprecated Finder: Open"
       }
-    ]
+    ],
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "deprecatedFinder",
+          "title": "Deprecated Finder",
+          "icon": "media/icon.svg"
+        }
+      ]
+    },
+    "views": {
+      "deprecatedFinder": [
+        {
+          "id": "deprecatedFinder.view",
+          "name": "Deprecated Items",
+          "icon": "media/icon.svg"
+        }
+      ]
+    }
   },
   "scripts": {
     "vscode:prepublish": "npm run compile",

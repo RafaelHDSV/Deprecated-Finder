@@ -37,9 +37,9 @@ export async function scanForDeprecated() {
 
   deprecatedStore.set(deprecatedItems)
 
-  vscode.window.showInformationMessage(
-    `Deprecated Finder found ${deprecatedItems.length} deprecated usages`
-  )
+  // vscode.window.showInformationMessage(
+  //   `Deprecated Finder found ${deprecatedItems.length} deprecated usages`
+  // )
 
   console.log('[Deprecated Finder]', deprecatedItems)
 }

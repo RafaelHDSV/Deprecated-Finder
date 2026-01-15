@@ -1,17 +1,21 @@
 import * as vscode from 'vscode'
 import { scanForDeprecated } from './core/scanner/deprecatedScanner'
+import { DeprecatedViewProvider } from './providers/DeprecatedViewProvider'
 
 export function activate(context: vscode.ExtensionContext) {
-  console.log('Deprecated Finder activated')
+  const provider = new DeprecatedViewProvider(context)
 
-  const disposable = vscode.commands.registerCommand(
-    'deprecatedFinder.open',
-    async () => {
-      await scanForDeprecated()
-    }
+  context.subscriptions.push(
+    vscode.window.registerWebviewViewProvider(
+      DeprecatedViewProvider.viewType,
+      provider
+    )
   )
 
-  context.subscriptions.push(disposable)
+  context.subscriptions.push(
+    vscode.commands.registerCommand('deprecatedFinder.open', async () => {
+      await scanForDeprecated()
+      provider.refresh()
+    })
+  )
 }
-
-export function deactivate() {}
