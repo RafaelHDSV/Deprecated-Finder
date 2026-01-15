@@ -1,6 +1,7 @@
 import * as vscode from 'vscode'
 import { scanForDeprecated } from './core/scanner/deprecatedScanner'
 import { DeprecatedViewProvider } from './providers/DeprecatedViewProvider'
+import { openDeprecatedPanel } from './ui/deprecatedPanel'
 
 export function activate(context: vscode.ExtensionContext) {
   const provider = new DeprecatedViewProvider(context)
@@ -17,5 +18,11 @@ export function activate(context: vscode.ExtensionContext) {
       await scanForDeprecated()
       provider.refresh()
     })
+  )
+
+  context.subscriptions.push(
+    vscode.commands.registerCommand('deprecatedFinder.openPanel', () =>
+      openDeprecatedPanel(context)
+    )
   )
 }

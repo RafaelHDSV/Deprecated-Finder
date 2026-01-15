@@ -22,6 +22,10 @@
       {
         "command": "deprecatedFinder.open",
         "title": "Deprecated Finder: Open"
+      },
+      {
+        "command": "deprecatedFinder.openPanel",
+        "title": "Deprecated Finder: Open Panel"
       }
     ],
     "viewsContainers": {

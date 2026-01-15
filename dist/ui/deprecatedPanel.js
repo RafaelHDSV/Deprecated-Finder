@@ -33,17 +33,21 @@ var __importStar = (this && this.__importStar) || (function () {
     };
 })();
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.activate = activate;
+exports.openDeprecatedPanel = openDeprecatedPanel;
 const vscode = __importStar(require("vscode"));
-const deprecatedScanner_1 = require("./core/scanner/deprecatedScanner");
-const DeprecatedViewProvider_1 = require("./providers/DeprecatedViewProvider");
-const deprecatedPanel_1 = require("./ui/deprecatedPanel");
-function activate(context) {
-    const provider = new DeprecatedViewProvider_1.DeprecatedViewProvider(context);
-    context.subscriptions.push(vscode.window.registerWebviewViewProvider(DeprecatedViewProvider_1.DeprecatedViewProvider.viewType, provider));
-    context.subscriptions.push(vscode.commands.registerCommand('deprecatedFinder.open', async () => {
-        await (0, deprecatedScanner_1.scanForDeprecated)();
-        provider.refresh();
-    }));
-    context.subscriptions.push(vscode.commands.registerCommand('deprecatedFinder.openPanel', () => (0, deprecatedPanel_1.openDeprecatedPanel)(context)));
+const deprecatedStore_1 = require("../core/state/deprecatedStore");
+const deprecatedPanelHtml_1 = require("./deprecatedPanelHtml");
+let panel;
+function openDeprecatedPanel(context) {
+    if (panel) {
+        panel.reveal(vscode.ViewColumn.One);
+        return;
+    }
+    panel = vscode.window.createWebviewPanel('deprecatedFinder', 'Deprecated Finder', vscode.ViewColumn.One, {
+        enableScripts: true
+    });
+    panel.webview.html = (0, deprecatedPanelHtml_1.getDeprecatedPanelHtml)(deprecatedStore_1.deprecatedStore.getAll());
+    panel.onDidDispose(() => {
+        panel = undefined;
+    });
 }

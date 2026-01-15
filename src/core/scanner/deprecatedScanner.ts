@@ -22,7 +22,7 @@ export async function scanForDeprecated() {
     jsx: ts.JsxEmit.React
   })
 
-  const deprecatedItems = []
+  const deprecatedMap = new Map<string, any>()
 
   for (const sourceFile of program.getSourceFiles()) {
     if (!sourceFile.fileName.includes('node_modules')) {
@@ -31,10 +31,18 @@ export async function scanForDeprecated() {
         program,
         sourceFile
       )
-      deprecatedItems.push(...items)
+
+      for (const item of items) {
+        const key = `${item.name}:${item.filePath}:${item.line}`
+
+        if (!deprecatedMap.has(key)) {
+          deprecatedMap.set(key, item)
+        }
+      }
     }
   }
 
+  const deprecatedItems = Array.from(deprecatedMap.values())
   deprecatedStore.set(deprecatedItems)
 
   vscode.window.showInformationMessage(

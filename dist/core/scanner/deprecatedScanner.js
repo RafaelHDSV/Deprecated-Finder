@@ -51,13 +51,19 @@ async function scanForDeprecated() {
         target: ts.ScriptTarget.Latest,
         jsx: ts.JsxEmit.React
     });
-    const deprecatedItems = [];
+    const deprecatedMap = new Map();
     for (const sourceFile of program.getSourceFiles()) {
         if (!sourceFile.fileName.includes('node_modules')) {
             const items = (0, tsDeprecatedScanner_1.scanFileForDeprecated)(sourceFile.fileName, program, sourceFile);
-            deprecatedItems.push(...items);
+            for (const item of items) {
+                const key = `${item.name}:${item.filePath}:${item.line}`;
+                if (!deprecatedMap.has(key)) {
+                    deprecatedMap.set(key, item);
+                }
+            }
         }
     }
+    const deprecatedItems = Array.from(deprecatedMap.values());
     deprecatedStore_1.deprecatedStore.set(deprecatedItems);
     vscode.window.showInformationMessage(`Deprecated Finder found ${deprecatedItems.length} deprecated usages`);
     console.log('[Deprecated Finder]', deprecatedItems);
