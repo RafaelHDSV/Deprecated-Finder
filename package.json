@@ -29,7 +29,8 @@
         {
           "id": "deprecatedFinder",
           "title": "Deprecated Finder",
-          "icon": "media/icon.svg"
+          "icon": "media/icon.svg",
+          "when": "true"
         }
       ]
     },
@@ -38,7 +39,9 @@
         {
           "id": "deprecatedFinder.view",
           "name": "Deprecated Items",
-          "icon": "media/icon.svg"
+          "type": "webview",
+          "icon": "media/icon.svg",
+          "when": "true"
         }
       ]
     }
