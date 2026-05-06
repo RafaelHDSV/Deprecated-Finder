@@ -6,8 +6,8 @@ export async function scanWorkspaceFiles(): Promise<vscode.Uri[]> {
   }
 
   const files = await vscode.workspace.findFiles(
-    '**/*.{ts,tsx}',
-    '**/{node_modules,dist,build,out}/**'
+    '**/*.{ts,tsx,js,jsx}',
+    '**/{node_modules,dist,build,out,.next,.git}/**'
   )
 
   return files
