@@ -1,3 +1,4 @@
+import * as path from 'path'
 import * as vscode from 'vscode'
 import {
   scanForDeprecated,
@@ -58,9 +59,24 @@ export function activate(context: vscode.ExtensionContext) {
           )
           return
         }
-        const ok = await fixItem(item)
-        if (ok) {
-          await scanSingleFile(item.filePath)
+        provider.setLoading(true)
+        provider.postProgress({
+          kind: 'indeterminate',
+          message: 'Applying fix…',
+          fileCount: 0
+        })
+        try {
+          const ok = await fixItem(item)
+          if (ok) {
+            provider.postProgress({
+              kind: 'indeterminate',
+              message: 'Updating list for this file…',
+              fileCount: 0
+            })
+            await scanSingleFile(item.filePath)
+          }
+        } finally {
+          provider.setLoading(false)
         }
       }
     )
@@ -69,15 +85,32 @@ export function activate(context: vscode.ExtensionContext) {
   context.subscriptions.push(
     vscode.commands.registerCommand('deprecatedFinder.fixAll', async () => {
       const items = deprecatedStore.getAll()
-      const summary = await fixAll(items)
-      vscode.window.showInformationMessage(
-        `Deprecated Finder: fixed ${summary.fixed} occurrence(s) in ${summary.files} file(s).` +
-          (summary.skipped > 0
-            ? ` Skipped ${summary.skipped} item(s) without suggestion.`
-            : '')
-      )
-      invalidateProgramCache()
-      await scanForDeprecated()
+      provider.setLoading(true)
+      provider.postProgress({
+        kind: 'indeterminate',
+        message: 'Applying fixes to the workspace…',
+        fileCount: 0
+      })
+      try {
+        const summary = await fixAll(items)
+        vscode.window.showInformationMessage(
+          `Deprecated Finder: fixed ${summary.fixed} occurrence(s) in ${summary.files} file(s).` +
+            (summary.skipped > 0
+              ? ` Skipped ${summary.skipped} item(s) without suggestion.`
+              : '')
+        )
+        invalidateProgramCache()
+        provider.postProgress({
+          kind: 'indeterminate',
+          message: 'Re-scanning workspace…',
+          fileCount: 0
+        })
+        await scanForDeprecated((update) => {
+          provider.postProgress(update)
+        })
+      } finally {
+        provider.setLoading(false)
+      }
     })
   )
 
@@ -98,6 +131,8 @@ export function activate(context: vscode.ExtensionContext) {
       if (!/\.(ts|tsx|js|jsx)$/i.test(document.fileName)) {
         return
       }
+      const shortName = path.basename(document.fileName)
+      provider.beginFileRescanActivity(shortName)
       try {
         await scanSingleFile(document.fileName)
       } catch (error) {
@@ -105,6 +140,8 @@ export function activate(context: vscode.ExtensionContext) {
           '[Deprecated Finder] Failed to re-scan saved file',
           error
         )
+      } finally {
+        provider.endFileRescanActivity()
       }
     })
   )

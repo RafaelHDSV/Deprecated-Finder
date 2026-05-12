@@ -10,6 +10,9 @@ export class DeprecatedViewProvider implements vscode.WebviewViewProvider {
   private loading = false
   private storeUnsubscribe?: () => void
 
+  /** Save-triggered single-file scans: defer full HTML refresh so the activity strip stays visible. */
+  private fileRescanDepth = 0
+
   constructor(private readonly context: vscode.ExtensionContext) {}
 
   resolveWebviewView(webviewView: vscode.WebviewView) {
@@ -19,9 +22,13 @@ export class DeprecatedViewProvider implements vscode.WebviewViewProvider {
 
     this.storeUnsubscribe?.()
     this.storeUnsubscribe = deprecatedStore.onChange(() => {
-      if (!this.loading) {
-        this.refresh()
+      if (this.loading) {
+        return
       }
+      if (this.fileRescanDepth > 0) {
+        return
+      }
+      this.refresh()
     })
 
     webviewView.onDidDispose(() => {
@@ -57,6 +64,26 @@ export class DeprecatedViewProvider implements vscode.WebviewViewProvider {
     this.view?.webview.postMessage({ type: 'progress', ...update })
   }
 
+  /**
+   * Lightweight banner (save → single-file re-scan) without replacing the whole webview.
+   */
+  public beginFileRescanActivity(shortFileName: string) {
+    this.fileRescanDepth++
+    this.view?.webview.postMessage({
+      type: 'activity',
+      show: true,
+      message: `Re-scanning after save: ${shortFileName}…`
+    })
+  }
+
+  public endFileRescanActivity() {
+    this.fileRescanDepth = Math.max(0, this.fileRescanDepth - 1)
+    if (this.fileRescanDepth === 0) {
+      this.view?.webview.postMessage({ type: 'activity', show: false })
+      this.refresh()
+    }
+  }
+
   private handleMessage(message: { type: string; [key: string]: unknown }) {
     switch (message.type) {
       case 'openFile':
@@ -87,7 +114,9 @@ export class DeprecatedViewProvider implements vscode.WebviewViewProvider {
     const grouped = groupByFile(items)
 
     const fileSections = Array.from(grouped.entries())
-      .map(([filePath, fileItems]) => renderFileSection(filePath, fileItems))
+      .map(([filePath, fileItems]) =>
+        renderFileSection(filePath, fileItems, this.loading)
+      )
       .join('')
 
     const emptyState =
@@ -139,6 +168,11 @@ export class DeprecatedViewProvider implements vscode.WebviewViewProvider {
       />
     </div>
 
+    <div id="activity-banner" class="activity-banner is-hidden" role="status" aria-live="polite">
+      <span class="activity-spinner" aria-hidden="true"></span>
+      <span id="activity-text" class="activity-text"></span>
+    </div>
+
     ${loadingState}
     ${emptyState}
 
@@ -154,6 +188,21 @@ export class DeprecatedViewProvider implements vscode.WebviewViewProvider {
       // ── Progress via postMessage ──────────────────────────────────────────
       window.addEventListener('message', (event) => {
         const msg = event.data;
+
+        if (msg.type === 'activity') {
+          const banner = document.getElementById('activity-banner');
+          const label = document.getElementById('activity-text');
+          if (!banner || !label) return;
+          if (msg.show) {
+            banner.classList.remove('is-hidden');
+            label.textContent = msg.message || 'Working…';
+          } else {
+            banner.classList.add('is-hidden');
+            label.textContent = '';
+          }
+          return;
+        }
+
         if (msg.type !== 'progress') return;
 
         const bar = document.getElementById('progress-bar-inner');
@@ -253,10 +302,14 @@ function groupByFile(items: DeprecatedItem[]): Map<string, DeprecatedItem[]> {
   return map
 }
 
-function renderFileSection(filePath: string, items: DeprecatedItem[]): string {
+function renderFileSection(
+  filePath: string,
+  items: DeprecatedItem[],
+  actionsLocked: boolean
+): string {
   const shortName = filePath.split(/[\\/]/).pop() ?? filePath
   const dir = filePath.replace(/[\\/][^\\/]*$/, '')
-  const itemsHtml = items.map((item) => renderItem(item)).join('')
+  const itemsHtml = items.map((item) => renderItem(item, actionsLocked)).join('')
 
   return `
 <section class="file">
@@ -269,15 +322,18 @@ function renderFileSection(filePath: string, items: DeprecatedItem[]): string {
 </section>`
 }
 
-function renderItem(item: DeprecatedItem): string {
+function renderItem(item: DeprecatedItem, actionsLocked: boolean): string {
   const hasSuggestion = Boolean(item.suggestion)
 
   const suggestionHtml = hasSuggestion
     ? `<div class="suggestion">→ <code>${escHtml(item.suggestion!)}</code></div>`
     : `<div class="suggestion no-suggestion">No replacement suggested</div>`
 
+  const fixDisabled = actionsLocked
   const fixButton = hasSuggestion
-    ? `<button class="btn small primary" data-action="fixItem" data-item-id="${escAttr(item.id)}">Fix</button>`
+    ? `<button class="btn small primary" data-action="fixItem" data-item-id="${escAttr(
+        item.id
+      )}" ${fixDisabled ? 'disabled' : ''}>Fix</button>`
     : `<button class="btn small" disabled>Fix</button>`
 
   return `
@@ -370,6 +426,29 @@ body {
 .search-input:focus {
   border-color: var(--vscode-focusBorder);
 }
+
+/* Save-triggered re-scan banner */
+.activity-banner {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  font-size: 11px;
+  color: var(--vscode-descriptionForeground);
+  background: var(--vscode-editor-inactiveSelectionBackground, rgba(127,127,127,0.12));
+  border-bottom: 1px solid var(--vscode-panel-border);
+}
+.activity-banner.is-hidden { display: none !important; }
+.activity-spinner {
+  width: 11px;
+  height: 11px;
+  flex-shrink: 0;
+  border: 2px solid var(--vscode-descriptionForeground);
+  border-top-color: transparent;
+  border-radius: 50%;
+  animation: spin 0.75s linear infinite;
+}
+.activity-text { flex: 1; min-width: 0; word-break: break-word; }
 
 /* Loading / progress */
 .loading-state {
