@@ -63,7 +63,7 @@ npm run lint          # eslint
 
 For a clean clone matching CI exactly, use `npm ci` instead of `npm install`.
 
-Press `F5` from VS Code to launch the **Extension Development Host** with the extension loaded.
+Open **Run and Debug** (or press `F5`) and choose **Run Extension** to open the **Extension Development Host** with this extension loaded. The workspace ships `.vscode/launch.json` and `.vscode/tasks.json`, so you do not need to recreate them after cloning.
 
 ## Compatibility
 

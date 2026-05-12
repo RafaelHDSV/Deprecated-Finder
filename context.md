@@ -50,6 +50,7 @@ src/
     deprecatedPanelHtml.ts              # HTML do painel tabular
 
 out/                                    # build output (gitignored)
+.vscode/                                # versionado: launch, tasks, extensions (recomendações)
 .issues/github/                         # documentos de proposta/issue (gitignored)
 ```
 
@@ -112,5 +113,7 @@ npm run lint
 ```
 
 Para empacotar: `npx vsce package`. Para publicar no Marketplace: `npx vsce publish` (requer publisher configurado).
+
+Depurar no VS Code/Cursor: configuração **Run Extension** em `.vscode/launch.json` (tarefa padrão de build: `npm run watch` via `tasks.json`).
 
 O Cursor é compatível nativamente com extensões `.vsix` e do Marketplace — não há build/publish separado.
