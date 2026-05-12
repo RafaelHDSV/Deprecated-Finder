@@ -34,11 +34,15 @@ Example: Ant Design Modal v4 → v5
 
 ### Available commands
 
-| Command | Description |
-|---|---|
-| `Deprecated Finder: Scan workspace` | Re-scan all supported files in the workspace |
-| `Deprecated Finder: Open panel` | Open the tabular panel with all results |
-| `Deprecated Finder: Fix all` | Apply every available replacement |
+Every `deprecatedFinder.*` command is listed below. **Visible in Command Palette** means it appears in `Ctrl+Shift+P`. Commands marked **No** are hidden there (`when: false` in `package.json`) so the palette stays short; they still run from the sidebar, tabular panel, Quick Fix, and from `vscode.commands.executeCommand()` (including custom keybindings you add in `keybindings.json`).
+
+| Command ID | Title | Description | Visible in Command Palette | Invoked from |
+|---|---|---|---|---|
+| `deprecatedFinder.scan` | Deprecated Finder: Scan workspace | Re-scan all supported files in the workspace | Yes | Command Palette; **Re-scan** in sidebar or tabular panel |
+| `deprecatedFinder.openPanel` | Deprecated Finder: Open panel | Open the tabular panel with all results | Yes | Command Palette (or a keybinding you assign) |
+| `deprecatedFinder.fixAll` | Deprecated Finder: Fix all | Apply every available replacement that has a parsed suggestion | Yes | Command Palette; **Fix all** in sidebar or tabular panel |
+| `deprecatedFinder.fixItem` | Deprecated Finder: Fix item | Apply the fix for a single stored item | No | **Fix** in sidebar or tabular panel; editor Quick Fix (`Ctrl+.`). Arguments: `itemId: string` |
+| `deprecatedFinder.openFile` | Deprecated Finder: Open file at line | Open a file and move the cursor to a line | No | Clicking a result row in sidebar or tabular panel. Arguments: `filePath: string` (absolute), `line: number` (1-based) |
 
 ### Suggestion patterns recognized
 

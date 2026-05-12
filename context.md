@@ -80,13 +80,15 @@ deprecatedStore.set()   │  deprecatedStore.set()        deprecatedStore.update
 
 ## Comandos VS Code expostos
 
-| ID | Visível na palette? |
-|---|---|
-| `deprecatedFinder.scan` | Sim |
-| `deprecatedFinder.openPanel` | Sim |
-| `deprecatedFinder.fixAll` | Sim |
-| `deprecatedFinder.fixItem` | Não (apenas chamado pela UI/CodeAction) |
-| `deprecatedFinder.openFile` | Não (apenas chamado pela UI) |
+Comandos com **Não** em «Visível na palette» usam `when: false` em `package.json` para não poluir `Ctrl+Shift+P`; continuam acessíveis pela webview, Quick Fix e `executeCommand`.
+
+| ID | Título (palette) | Visível na palette? | Como é invocado |
+|---|---|---|---|
+| `deprecatedFinder.scan` | Deprecated Finder: Scan workspace | Sim | Palette; botão **Re-scan** na sidebar ou painel tabular |
+| `deprecatedFinder.openPanel` | Deprecated Finder: Open panel | Sim | Palette (ou atalho definido pelo utilizador) |
+| `deprecatedFinder.fixAll` | Deprecated Finder: Fix all | Sim | Palette; **Fix all** na sidebar ou painel tabular |
+| `deprecatedFinder.fixItem` | Deprecated Finder: Fix item | Não | **Fix** na sidebar/painel; Quick Fix no editor. Args: `itemId: string` |
+| `deprecatedFinder.openFile` | Deprecated Finder: Open file at line | Não | Clique numa linha de resultado. Args: `filePath` (absoluto), `line` (1-based) |
 
 ## Padrões de sugestão reconhecidos no `@deprecated`
 
