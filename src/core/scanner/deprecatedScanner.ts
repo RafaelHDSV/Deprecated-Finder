@@ -4,6 +4,12 @@ import * as vscode from 'vscode'
 import { DeprecatedItem } from '../model/DeprecatedItem'
 import { deprecatedStore } from '../state/deprecatedStore'
 import { normalizePathForComparison } from '../util/pathComparison'
+import {
+  getShowScanSummary,
+  logScanDiagnostic,
+  logScanWarning,
+  shouldToastScanResultSummary
+} from '../../logging/deprecatedFinderLog'
 import { scanFileForDeprecated } from './tsDeprecatedScanner'
 import { scanWorkspaceFiles } from './workspaceScanner'
 
@@ -208,9 +214,10 @@ function buildScanCompilerOptions(
   parsed: ts.ParsedCommandLine
 ): ts.CompilerOptions {
   if (parsed.errors.length > 0) {
-    console.warn(
-      '[Deprecated Finder] tsconfig parse warnings:',
-      parsed.errors.map((e) => e.messageText)
+    logScanWarning(
+      `tsconfig parse warnings: ${parsed.errors
+        .map((e) => String(e.messageText))
+        .join('; ')}`
     )
   }
   return {
@@ -285,6 +292,7 @@ export async function scanForDeprecated(
 ): Promise<DeprecatedItem[]> {
   const narrative: ScanNarrative = options?.narrative ?? 'default'
   const postFix = narrative === 'post-fix'
+  const summaryMode = getShowScanSummary()
 
   onProgress?.({
     kind: 'indeterminate',
@@ -344,7 +352,7 @@ export async function scanForDeprecated(
       : FALLBACK_OPTIONS
     const effectiveLabel = expanded?.effectiveConfigPath ?? '(fallback options)'
 
-    console.log(
+    logScanDiagnostic(
       `[Deprecated Finder] Program for group "${groupKey}": ${paths.length} file(s); tsconfig: ${effectiveLabel}`
     )
 
@@ -365,11 +373,15 @@ export async function scanForDeprecated(
 
   deprecatedStore.set(items)
 
-  vscode.window.showInformationMessage(
-    `Deprecated Finder: found ${items.length} deprecated usage${items.length === 1 ? '' : 's'}.`
-  )
+  if (shouldToastScanResultSummary(summaryMode, items.length)) {
+    vscode.window.showInformationMessage(
+      `Deprecated Finder: found ${items.length} deprecated usage${items.length === 1 ? '' : 's'}.`
+    )
+  }
 
-  console.log(`[Deprecated Finder] Workspace scan: ${items.length} item(s)`)
+  logScanDiagnostic(
+    `[Deprecated Finder] Workspace scan: ${items.length} item(s)`
+  )
   return items
 }
 
@@ -403,13 +415,13 @@ export async function scanSingleFile(
 
   const sourceFile = getSourceFileForPath(freshProgram, filePath)
   if (!sourceFile) {
-    console.warn(`[Deprecated Finder] Could not load source file: ${filePath}`)
+    logScanWarning(`Could not load source file: ${filePath}`)
     return []
   }
 
   const items = scanFileForDeprecated(filePath, freshProgram, sourceFile)
   deprecatedStore.updateFile(sourceFile.fileName, items)
-  console.log(
+  logScanDiagnostic(
     `[Deprecated Finder] File scan (${sourceFile.fileName}): ${items.length} item(s)`
   )
   return items

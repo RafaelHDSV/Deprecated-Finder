@@ -20,6 +20,7 @@ Issue de origem: `.issues/github/ISSUE-001-deprecated-finder.md`.
 ## Stack
 
 - **npm** como gerenciador oficial (`package-lock.json`; CI com `npm ci`)
+- Configurações `deprecatedFinder.showScanSummary` e `deprecatedFinder.verboseLogging` (`package.json` → Settings); diagnóstico verboso e avisos do scan no painel **Output → Deprecated Finder**
 - TypeScript (`commonjs`, target ES2020)
 - VS Code Extension API (`@types/vscode ^1.100`)
 - TypeScript Compiler API (`typescript` em `dependencies`, runtime)
@@ -31,6 +32,8 @@ Issue de origem: `.issues/github/ISSUE-001-deprecated-finder.md`.
 ```
 src/
   extension.ts                          # entry point: comandos, listeners, providers
+  logging/
+    deprecatedFinderLog.ts              # Output channel; scan diagnostics / warn / error
   core/
     model/DeprecatedItem.ts             # tipos: DeprecatedItem, ImportInfo
     state/deprecatedStore.ts            # store em memória + pub/sub para a UI

@@ -86,6 +86,27 @@
           "icon": "media/icon.svg"
         }
       ]
+    },
+    "configuration": {
+      "title": "Deprecated Finder",
+      "properties": {
+        "deprecatedFinder.showScanSummary": {
+          "type": "string",
+          "default": "whenIssuesFound",
+          "enum": ["always", "whenIssuesFound", "never"],
+          "enumDescriptions": [
+            "Show an information notification after every workspace scan that found source files.",
+            "Show that notification only when at least one deprecated usage was found.",
+            "Never show the post-scan count notification. The «no source files in workspace» notice still appears when no files match."
+          ],
+          "description": "When to show the toast summarizing how many deprecated usages were found after a full workspace scan. The empty-workspace notice is always shown."
+        },
+        "deprecatedFinder.verboseLogging": {
+          "type": "boolean",
+          "default": false,
+          "description": "Append detailed scan lines (per tsconfig group, per-file counts) to the Deprecated Finder output channel (View → Output → Deprecated Finder)."
+        }
+      }
     }
   },
   "scripts": {

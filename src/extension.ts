@@ -10,6 +10,10 @@ import { fixAll, fixItem } from './core/fix/fixEngine'
 import { DeprecatedViewProvider } from './providers/DeprecatedViewProvider'
 import { DeprecatedCodeActionProvider } from './providers/DeprecatedCodeActionProvider'
 import { openDeprecatedPanel } from './ui/deprecatedPanel'
+import {
+  registerDeprecatedFinderLog,
+  logScanError
+} from './logging/deprecatedFinderLog'
 
 const SUPPORTED_LANGUAGES: vscode.DocumentSelector = [
   { language: 'typescript', scheme: 'file' },
@@ -19,6 +23,8 @@ const SUPPORTED_LANGUAGES: vscode.DocumentSelector = [
 ]
 
 export function activate(context: vscode.ExtensionContext) {
+  registerDeprecatedFinderLog(context)
+
   const provider = new DeprecatedViewProvider(context)
 
   context.subscriptions.push(
@@ -131,7 +137,7 @@ export function activate(context: vscode.ExtensionContext) {
       try {
         await scanSingleFile(document.fileName)
       } catch (error) {
-        console.error(
+        logScanError(
           '[Deprecated Finder] Failed to re-scan saved file',
           error
         )
@@ -156,7 +162,7 @@ export function activate(context: vscode.ExtensionContext) {
       provider.postProgress(update)
     })
       .catch((error) => {
-        console.error('[Deprecated Finder] Initial scan failed', error)
+        logScanError('[Deprecated Finder] Initial scan failed', error)
       })
       .finally(() => {
         provider.setLoading(false)

@@ -71,6 +71,15 @@ Open **Run and Debug** (or press `F5`) and choose **Run Extension** to open the 
 
 Contributors: see [CONTRIBUTING.md](CONTRIBUTING.md) for **path comparison rules** (cross-platform) and contribution notes.
 
+## Settings
+
+Configure in **Settings** (`Ctrl+,`) under **Deprecated Finder**, or in `settings.json`:
+
+| Setting | Values / type | Default | Purpose |
+|---|---|---|---|
+| `deprecatedFinder.showScanSummary` | `always` \| `whenIssuesFound` \| `never` | `whenIssuesFound` | When to show the information toast after a **full workspace** scan that found source files. `whenIssuesFound` only notifies if at least one deprecated usage exists. **`never`** suppresses that summary toast. The **«no source files in workspace»** toast still appears when the glob finds no files (empty or non-matching workspace). |
+| `deprecatedFinder.verboseLogging` | boolean | `false` | When `true`, append detailed scan lines (per tsconfig program group, workspace total, per-file single-file scan) to **View → Output → Deprecated Finder**. Warnings (e.g. could not load a source file, tsconfig parse warnings) are written to that channel whenever they occur, without a toast. |
+
 ## Compatibility
 
 - VS Code `>= 1.100.0`
