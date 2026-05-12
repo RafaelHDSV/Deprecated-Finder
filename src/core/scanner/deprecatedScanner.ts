@@ -330,11 +330,11 @@ export async function scanForDeprecated(
       kind: 'indeterminate',
       message: postFix
         ? groupCount > 1
-          ? `Re-scanning workspace: building TypeScript programs (${groupIndex}/${groupCount})…`
-          : 'Re-scanning workspace: building TypeScript program…'
+          ? `Re-scanning workspace: building programs (${groupIndex}/${groupCount})…`
+          : 'Re-scanning workspace: building program…'
         : groupCount > 1
-          ? `Building TypeScript program (${groupIndex}/${groupCount})…`
-          : 'Building TypeScript program…',
+          ? `Building program (${groupIndex}/${groupCount})…`
+          : 'Building program…',
       fileCount: 0
     })
 
