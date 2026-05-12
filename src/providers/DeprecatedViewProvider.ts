@@ -1,6 +1,7 @@
 import * as vscode from 'vscode'
 import { deprecatedStore } from '../core/state/deprecatedStore'
 import { DeprecatedItem } from '../core/model/DeprecatedItem'
+import type { ScanProgressMessage } from '../core/scanner/deprecatedScanner'
 
 export class DeprecatedViewProvider implements vscode.WebviewViewProvider {
   public static readonly viewType = 'deprecatedFinder.view'
@@ -50,10 +51,10 @@ export class DeprecatedViewProvider implements vscode.WebviewViewProvider {
 
   /**
    * Sends a progress update to the webview without replacing the full HTML.
-   * The webview listens for `{ type: 'progress', current, total }` messages.
+   * Messages use `{ type: 'progress', ...ScanProgressMessage }`.
    */
-  public postProgress(current: number, total: number) {
-    this.view?.webview.postMessage({ type: 'progress', current, total })
+  public postProgress(update: ScanProgressMessage) {
+    this.view?.webview.postMessage({ type: 'progress', ...update })
   }
 
   private handleMessage(message: { type: string; [key: string]: unknown }) {
@@ -157,15 +158,23 @@ export class DeprecatedViewProvider implements vscode.WebviewViewProvider {
 
         const bar = document.getElementById('progress-bar-inner');
         const text = document.getElementById('progress-text');
-        if (bar) {
-          const pct = msg.total > 0 ? Math.round((msg.current / msg.total) * 100) : 0;
-          bar.style.width = pct + '%';
+        if (!bar || !text) return;
+
+        if (msg.kind === 'indeterminate') {
+          bar.classList.add('indeterminate');
+          bar.style.width = '';
+          const n = msg.fileCount > 0 ? ' (' + msg.fileCount + ' files)' : '';
+          text.textContent = msg.message + n;
+          return;
         }
-        if (text) {
-          text.textContent = msg.total > 0
-            ? 'Scanning ' + msg.current + ' / ' + msg.total + ' files…'
+
+        bar.classList.remove('indeterminate');
+        const pct = msg.total > 0 ? Math.round((msg.current / msg.total) * 100) : 0;
+        bar.style.width = pct + '%';
+        text.textContent =
+          msg.total > 0
+            ? 'Analyzing ' + msg.current + ' / ' + msg.total + ' workspace files…'
             : 'Initializing…';
-        }
       });
 
       // ── Search ────────────────────────────────────────────────────────────
@@ -378,6 +387,15 @@ body {
   background: var(--vscode-progressBar-background, var(--vscode-button-background));
   transition: width 0.2s ease;
   border-radius: 2px;
+}
+.progress-bar-inner.indeterminate {
+  width: 40%;
+  transition: none;
+  animation: indeterminate-slide 1.1s ease-in-out infinite;
+}
+@keyframes indeterminate-slide {
+  0% { transform: translateX(-30%); }
+  100% { transform: translateX(250%); }
 }
 .spinner {
   width: 12px; height: 12px; flex-shrink: 0;

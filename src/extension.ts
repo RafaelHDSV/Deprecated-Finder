@@ -32,8 +32,8 @@ export function activate(context: vscode.ExtensionContext) {
       invalidateProgramCache()
       provider.setLoading(true)
       try {
-        await scanForDeprecated((current, total) => {
-          provider.postProgress(current, total)
+        await scanForDeprecated((update) => {
+          provider.postProgress(update)
         })
       } finally {
         provider.setLoading(false)
@@ -120,8 +120,8 @@ export function activate(context: vscode.ExtensionContext) {
   // Initial scan when the extension activates with an open workspace.
   if (vscode.workspace.workspaceFolders?.length) {
     provider.setLoading(true)
-    scanForDeprecated((current, total) => {
-      provider.postProgress(current, total)
+    scanForDeprecated((update) => {
+      provider.postProgress(update)
     })
       .catch((error) => {
         console.error('[Deprecated Finder] Initial scan failed', error)

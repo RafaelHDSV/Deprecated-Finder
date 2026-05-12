@@ -6,7 +6,17 @@ import { deprecatedStore } from '../state/deprecatedStore'
 import { scanFileForDeprecated } from './tsDeprecatedScanner'
 import { DeprecatedItem } from '../model/DeprecatedItem'
 
-export type ProgressCallback = (current: number, total: number) => void
+/** Progress updates for the sidebar UI (determinate file scan vs. long TS program build). */
+export type ScanProgressMessage =
+  | {
+      kind: 'indeterminate'
+      message: string
+      /** Total root files once known; 0 while still searching */
+      fileCount: number
+    }
+  | { kind: 'determinate'; current: number; total: number }
+
+export type ProgressCallback = (update: ScanProgressMessage) => void
 
 const FALLBACK_OPTIONS: ts.CompilerOptions = {
   allowJs: true,
@@ -86,6 +96,12 @@ function resolveCompilerOptions(): ts.CompilerOptions {
 }
 
 export async function scanForDeprecated(onProgress?: ProgressCallback): Promise<DeprecatedItem[]> {
+  onProgress?.({
+    kind: 'indeterminate',
+    message: 'Searching workspace for source files…',
+    fileCount: 0
+  })
+
   const files = await scanWorkspaceFiles()
 
   if (files.length === 0) {
@@ -97,9 +113,17 @@ export async function scanForDeprecated(onProgress?: ProgressCallback): Promise<
   }
 
   const filePaths = files.map((f) => f.fsPath)
-  onProgress?.(0, filePaths.length)
+
+  onProgress?.({
+    kind: 'indeterminate',
+    message: 'Building TypeScript program (parsing & binding)…',
+    fileCount: filePaths.length
+  })
 
   const program = createProgram(filePaths)
+
+  onProgress?.({ kind: 'determinate', current: 0, total: filePaths.length })
+
   const items = collectFromProgramWithProgress(program, filePaths, onProgress)
 
   deprecatedStore.set(items)
@@ -136,15 +160,15 @@ export async function scanSingleFile(filePath: string): Promise<DeprecatedItem[]
     program
   )
 
-  const sourceFile = freshProgram.getSourceFile(filePath)
+  const sourceFile = getSourceFileForPath(freshProgram, filePath)
   if (!sourceFile) {
     console.warn(`[Deprecated Finder] Could not load source file: ${filePath}`)
     return []
   }
 
   const items = scanFileForDeprecated(filePath, freshProgram, sourceFile)
-  deprecatedStore.updateFile(filePath, items)
-  console.log(`[Deprecated Finder] File scan (${filePath}): ${items.length} item(s)`)
+  deprecatedStore.updateFile(sourceFile.fileName, items)
+  console.log(`[Deprecated Finder] File scan (${sourceFile.fileName}): ${items.length} item(s)`)
   return items
 }
 
@@ -172,10 +196,26 @@ function collectFromProgramWithProgress(
     }
 
     processed++
-    onProgress?.(processed, filePaths.length)
+    onProgress?.({ kind: 'determinate', current: processed, total: filePaths.length })
   }
 
   return Array.from(map.values())
+}
+
+function getSourceFileForPath(
+  program: ts.Program,
+  filePath: string
+): ts.SourceFile | undefined {
+  const direct =
+    program.getSourceFile(filePath) ??
+    program.getSourceFile(path.normalize(filePath))
+
+  if (direct) {
+    return direct
+  }
+
+  const target = normalize(filePath)
+  return program.getSourceFiles().find((sf) => normalize(sf.fileName) === target)
 }
 
 function createProgram(filePaths: string[]): ts.Program {

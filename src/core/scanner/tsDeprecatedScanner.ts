@@ -4,7 +4,28 @@ import { parseSuggestion, parseSuggestionModule } from './suggestionParser'
 import { resolveImportInfo } from './importResolver'
 
 export function scanFileForDeprecated(
-  filePath: string,
+  _filePath: string,
+  program: ts.Program,
+  sourceFile: ts.SourceFile
+): DeprecatedItem[] {
+  const fsPath = sourceFile.fileName
+  const usageItems = collectUsageDeprecated(fsPath, program, sourceFile)
+  const declItems = collectDeclarationSiteDeprecated(fsPath, program, sourceFile)
+  const byId = new Map<string, DeprecatedItem>()
+  for (const d of declItems) {
+    byId.set(d.id, d)
+  }
+  for (const u of usageItems) {
+    byId.set(u.id, u)
+  }
+  return Array.from(byId.values())
+}
+
+/**
+ * References to symbols whose declarations carry @deprecated (calls, props, etc.).
+ */
+function collectUsageDeprecated(
+  fsPath: string,
   program: ts.Program,
   sourceFile: ts.SourceFile
 ): DeprecatedItem[] {
@@ -90,7 +111,7 @@ export function scanFileForDeprecated(
       deprecatedItems.push({
         id,
         name: symbolName,
-        filePath,
+        filePath: fsPath,
         line: startPos.line + 1,
         column: startPos.character + 1,
         endLine: endPos.line + 1,
@@ -107,6 +128,117 @@ export function scanFileForDeprecated(
 
   visit(sourceFile)
   return deprecatedItems
+}
+
+/**
+ * Declaration sites marked @deprecated (skipped by the usage visitor because
+ * the identifier names the declaration). Surfaces APIs you just marked without
+ * needing a call site in the same file.
+ */
+function collectDeclarationSiteDeprecated(
+  fsPath: string,
+  program: ts.Program,
+  sourceFile: ts.SourceFile
+): DeprecatedItem[] {
+  const checker = program.getTypeChecker()
+  const out: DeprecatedItem[] = []
+  const seen = new Set<string>()
+
+  function addSite(
+    nameNode: ts.Identifier | ts.PrivateIdentifier,
+    declForTags: ts.Node,
+    forcedTag?: ts.JSDocTag
+  ) {
+    const deprecatedTag = forcedTag ?? findDeprecatedTag([declForTags])
+    if (!deprecatedTag) {
+      return
+    }
+
+    const rawMessage = readTagText(deprecatedTag)
+    const suggestion = parseSuggestion(rawMessage ?? '')
+    const suggestedModule = parseSuggestionModule(rawMessage ?? '')
+    const symbol = checker.getSymbolAtLocation(nameNode) ?? undefined
+    const symbolName = symbol?.getName() ?? nameNode.text
+
+    const start = nameNode.getStart()
+    const end = nameNode.getEnd()
+    const startPos = sourceFile.getLineAndCharacterOfPosition(start)
+    const endPos = sourceFile.getLineAndCharacterOfPosition(end)
+
+    const id = `${symbolName}-${sourceFile.fileName}-${startPos.line}-${startPos.character}`
+    if (seen.has(id)) {
+      return
+    }
+    seen.add(id)
+
+    const importInfo = symbol
+      ? resolveImportInfo(sourceFile, symbol, suggestedModule)
+      : undefined
+
+    out.push({
+      id,
+      name: symbolName,
+      filePath: fsPath,
+      line: startPos.line + 1,
+      column: startPos.character + 1,
+      endLine: endPos.line + 1,
+      endColumn: endPos.character + 1,
+      message: rawMessage?.trim() || 'This API is deprecated',
+      suggestion,
+      importInfo,
+      source: 'jsdoc'
+    })
+  }
+
+  function walkDecl(node: ts.Node) {
+    if (ts.isVariableStatement(node)) {
+      const tag = findDeprecatedTag([node])
+      if (tag) {
+        for (const decl of node.declarationList.declarations) {
+          if (ts.isIdentifier(decl.name)) {
+            addSite(decl.name, decl, tag)
+          }
+        }
+      }
+    } else if (ts.isFunctionDeclaration(node) && node.name) {
+      addSite(node.name, node)
+    } else if (ts.isFunctionExpression(node) && node.name) {
+      addSite(node.name, node)
+    } else if (ts.isClassDeclaration(node) && node.name) {
+      addSite(node.name, node)
+    } else if (ts.isInterfaceDeclaration(node) && node.name) {
+      addSite(node.name, node)
+    } else if (ts.isTypeAliasDeclaration(node) && node.name) {
+      addSite(node.name, node)
+    } else if (ts.isEnumDeclaration(node) && node.name) {
+      addSite(node.name, node)
+    } else if (ts.isEnumMember(node) && ts.isIdentifier(node.name)) {
+      addSite(node.name, node)
+    } else if (ts.isModuleDeclaration(node) && node.name && ts.isIdentifier(node.name)) {
+      addSite(node.name, node)
+    } else if (ts.isMethodDeclaration(node) && node.name && ts.isIdentifier(node.name)) {
+      addSite(node.name, node)
+    } else if (ts.isMethodSignature(node) && ts.isIdentifier(node.name)) {
+      addSite(node.name, node)
+    } else if (ts.isPropertyDeclaration(node) && node.name && ts.isIdentifier(node.name)) {
+      addSite(node.name, node)
+    } else if (ts.isPropertySignature(node) && ts.isIdentifier(node.name)) {
+      addSite(node.name, node)
+    } else if (ts.isGetAccessorDeclaration(node) && node.name && ts.isIdentifier(node.name)) {
+      addSite(node.name, node)
+    } else if (ts.isSetAccessorDeclaration(node) && node.name && ts.isIdentifier(node.name)) {
+      addSite(node.name, node)
+    } else if (ts.isParameter(node) && ts.isIdentifier(node.name)) {
+      addSite(node.name, node)
+    } else if (ts.isTypeParameterDeclaration(node) && ts.isIdentifier(node.name)) {
+      addSite(node.name, node)
+    }
+
+    ts.forEachChild(node, walkDecl)
+  }
+
+  walkDecl(sourceFile)
+  return out
 }
 
 /**
@@ -194,11 +326,9 @@ function getCallSiteDeprecatedTag(
   }
 }
 
-function findDeprecatedTag(
-  declarations: readonly ts.Declaration[]
-): ts.JSDocTag | undefined {
-  for (const decl of declarations) {
-    const tags = ts.getJSDocTags(decl)
+function findDeprecatedTag(nodes: readonly ts.Node[]): ts.JSDocTag | undefined {
+  for (const node of nodes) {
+    const tags = ts.getJSDocTags(node)
     const tag = tags.find((t) => t.tagName.text === 'deprecated')
     if (tag) {
       return tag

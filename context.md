@@ -10,7 +10,8 @@ Extensão VS Code / Cursor que:
 2. Extrai do próprio texto da tag a sugestão de substituição.
 3. Permite ao usuário corrigir cada ocorrência (ou todas) com um clique, atualizando identificador **e** import quando aplicável.
 4. Re-escaneia automaticamente o arquivo salvo (não o workspace inteiro).
-5. Oferece Quick Fix (lightbulb) no editor.
+5. Lista também o **próprio símbolo** na declaração quando há `@deprecated` no JSDoc (não só usos), para APIs recém-marcadas sem chamadas no arquivo.
+6. Oferece Quick Fix (lightbulb) no editor.
 
 Linguagens suportadas: `.ts`, `.tsx`, `.js`, `.jsx`.
 
@@ -88,6 +89,11 @@ deprecatedStore.set()   │  deprecatedStore.set()        deprecatedStore.update
 ## Padrões de sugestão reconhecidos no `@deprecated`
 
 `use X instead`, `replaced by X`, `replaced with X`, `in favor of X`, `utilize X`, `prefer X`, `{@link X}`. Quando nenhum padrão bate, `suggestion` é `undefined` e o botão Fix fica desabilitado.
+
+## Progresso na varredura
+
+- Fase **indeterminada** enquanto o TypeScript monta o `Program` (`createProgram`), onde o custo costuma concentrar-se em workspaces grandes.
+- Fase **determinada** (`analisando i / N` arquivos raiz) durante o passe que lê cada `SourceFile` do workspace.
 
 ## Limitações conhecidas (v0.1)
 
