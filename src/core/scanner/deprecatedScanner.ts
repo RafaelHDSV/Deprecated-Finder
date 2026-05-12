@@ -38,7 +38,9 @@ const expandedConfigByRoot = new Map<
 /** `normalize(source file path)` → config group key */
 const configGroupKeyByFile = new Map<string, string>()
 
-function tryParseTsConfig(configFilePath: string): ts.ParsedCommandLine | undefined {
+function tryParseTsConfig(
+  configFilePath: string
+): ts.ParsedCommandLine | undefined {
   const readResult = ts.readConfigFile(configFilePath, ts.sys.readFile)
   if (readResult.error || !readResult.config) {
     return undefined
@@ -50,7 +52,7 @@ function tryParseTsConfig(configFilePath: string): ts.ParsedCommandLine | undefi
   )
 }
 
-type TsConfigJsonShape = {
+interface TsConfigJsonShape {
   references?: readonly { path: string }[]
 }
 
@@ -75,7 +77,9 @@ function expandToEffectiveParsedCommandLine(
 
   const hasMeaningfulOptions =
     parsed.fileNames.length > 0 ||
-    Boolean(parsed.options.paths && Object.keys(parsed.options.paths).length > 0)
+    Boolean(
+      parsed.options.paths && Object.keys(parsed.options.paths).length > 0
+    )
 
   if (!hasMeaningfulOptions && Array.isArray(raw.references)) {
     const refPaths = raw.references
@@ -94,7 +98,10 @@ function expandToEffectiveParsedCommandLine(
       const refOk =
         refParsed &&
         (refParsed.fileNames.length > 0 ||
-          Boolean(refParsed.options.paths && Object.keys(refParsed.options.paths).length > 0))
+          Boolean(
+            refParsed.options.paths &&
+            Object.keys(refParsed.options.paths).length > 0
+          ))
       if (refOk && refParsed) {
         parsed = refParsed
         effectiveConfigPath = refPath
@@ -113,7 +120,10 @@ function expandToEffectiveParsedCommandLine(
     if (
       appParsed &&
       (appParsed.fileNames.length > 0 ||
-        Boolean(appParsed.options.paths && Object.keys(appParsed.options.paths).length > 0))
+        Boolean(
+          appParsed.options.paths &&
+          Object.keys(appParsed.options.paths).length > 0
+        ))
     ) {
       parsed = appParsed
       effectiveConfigPath = appPath
@@ -127,10 +137,14 @@ function normalizePathKey(filePath: string): string {
   return filePath.replace(/\\/g, '/').toLowerCase()
 }
 
-function getExpandedForSourceFile(sourceFilePath: string):
-  | { parsed: ts.ParsedCommandLine; effectiveConfigPath: string }
-  | undefined {
-  const root = ts.findConfigFile(path.dirname(sourceFilePath), ts.sys.fileExists, 'tsconfig.json')
+function getExpandedForSourceFile(
+  sourceFilePath: string
+): { parsed: ts.ParsedCommandLine; effectiveConfigPath: string } | undefined {
+  const root = ts.findConfigFile(
+    path.dirname(sourceFilePath),
+    ts.sys.fileExists,
+    'tsconfig.json'
+  )
   if (!root) {
     return undefined
   }
@@ -160,12 +174,16 @@ function configGroupKeyForFile(filePath: string): string {
     return memo
   }
   const expanded = getExpandedForSourceFile(filePath)
-  const key = expanded ? normalizePathKey(expanded.effectiveConfigPath) : '__no_tsconfig__'
+  const key = expanded
+    ? normalizePathKey(expanded.effectiveConfigPath)
+    : '__no_tsconfig__'
   configGroupKeyByFile.set(fk, key)
   return key
 }
 
-function groupWorkspaceFilesByTsConfig(filePaths: string[]): Map<string, string[]> {
+function groupWorkspaceFilesByTsConfig(
+  filePaths: string[]
+): Map<string, string[]> {
   const groups = new Map<string, string[]>()
   for (const fp of filePaths) {
     const key = configGroupKeyForFile(fp)
@@ -176,7 +194,9 @@ function groupWorkspaceFilesByTsConfig(filePaths: string[]): Map<string, string[
   return groups
 }
 
-function buildScanCompilerOptions(parsed: ts.ParsedCommandLine): ts.CompilerOptions {
+function buildScanCompilerOptions(
+  parsed: ts.ParsedCommandLine
+): ts.CompilerOptions {
   if (parsed.errors.length > 0) {
     console.warn(
       '[Deprecated Finder] tsconfig parse warnings:',
@@ -229,7 +249,9 @@ function collectFromProgramWithProgress(
   return Array.from(map.values())
 }
 
-export async function scanForDeprecated(onProgress?: ProgressCallback): Promise<DeprecatedItem[]> {
+export async function scanForDeprecated(
+  onProgress?: ProgressCallback
+): Promise<DeprecatedItem[]> {
   onProgress?.({
     kind: 'indeterminate',
     message: 'Searching workspace for source files…',
@@ -265,7 +287,9 @@ export async function scanForDeprecated(onProgress?: ProgressCallback): Promise<
       groupKey === '__no_tsconfig__'
         ? undefined
         : getExpandedForSourceFile(paths[0] ?? '')
-    const options = expanded ? buildScanCompilerOptions(expanded.parsed) : FALLBACK_OPTIONS
+    const options = expanded
+      ? buildScanCompilerOptions(expanded.parsed)
+      : FALLBACK_OPTIONS
     const effectiveLabel = expanded?.effectiveConfigPath ?? '(fallback options)'
 
     console.log(
@@ -274,7 +298,12 @@ export async function scanForDeprecated(onProgress?: ProgressCallback): Promise<
 
     const program = ts.createProgram(paths, options)
     const allowed = new Set(paths.map((p) => normalizePathKey(p)))
-    const chunk = collectFromProgramWithProgress(program, allowed, onProgress, progress)
+    const chunk = collectFromProgramWithProgress(
+      program,
+      allowed,
+      onProgress,
+      progress
+    )
     for (const item of chunk) {
       map.set(item.id, item)
     }
@@ -292,7 +321,9 @@ export async function scanForDeprecated(onProgress?: ProgressCallback): Promise<
   return items
 }
 
-export async function scanSingleFile(filePath: string): Promise<DeprecatedItem[]> {
+export async function scanSingleFile(
+  filePath: string
+): Promise<DeprecatedItem[]> {
   if (!isSupportedFile(filePath)) {
     return []
   }
@@ -304,11 +335,17 @@ export async function scanSingleFile(filePath: string): Promise<DeprecatedItem[]
 
   const allPaths = files.map((f) => f.fsPath)
   const groupKey = configGroupKeyForFile(filePath)
-  const groupPaths = allPaths.filter((p) => configGroupKeyForFile(p) === groupKey)
+  const groupPaths = allPaths.filter(
+    (p) => configGroupKeyForFile(p) === groupKey
+  )
 
   const expanded =
-    groupKey === '__no_tsconfig__' ? undefined : getExpandedForSourceFile(filePath)
-  const options = expanded ? buildScanCompilerOptions(expanded.parsed) : FALLBACK_OPTIONS
+    groupKey === '__no_tsconfig__'
+      ? undefined
+      : getExpandedForSourceFile(filePath)
+  const options = expanded
+    ? buildScanCompilerOptions(expanded.parsed)
+    : FALLBACK_OPTIONS
 
   const freshProgram = ts.createProgram(groupPaths, options)
 
@@ -320,7 +357,9 @@ export async function scanSingleFile(filePath: string): Promise<DeprecatedItem[]
 
   const items = scanFileForDeprecated(filePath, freshProgram, sourceFile)
   deprecatedStore.updateFile(sourceFile.fileName, items)
-  console.log(`[Deprecated Finder] File scan (${sourceFile.fileName}): ${items.length} item(s)`)
+  console.log(
+    `[Deprecated Finder] File scan (${sourceFile.fileName}): ${items.length} item(s)`
+  )
   return items
 }
 
@@ -329,14 +368,17 @@ function getSourceFileForPath(
   filePath: string
 ): ts.SourceFile | undefined {
   const direct =
-    program.getSourceFile(filePath) ?? program.getSourceFile(path.normalize(filePath))
+    program.getSourceFile(filePath) ??
+    program.getSourceFile(path.normalize(filePath))
 
   if (direct) {
     return direct
   }
 
   const target = normalizePathKey(filePath)
-  return program.getSourceFiles().find((sf) => normalizePathKey(sf.fileName) === target)
+  return program
+    .getSourceFiles()
+    .find((sf) => normalizePathKey(sf.fileName) === target)
 }
 
 export function invalidateProgramCache() {
