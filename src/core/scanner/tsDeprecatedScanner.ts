@@ -204,12 +204,13 @@ function collectDeclarationSiteDeprecated(
 
   function walkDecl(node: ts.Node) {
     if (ts.isVariableStatement(node)) {
-      const tag = findDeprecatedTag([node])
-      if (tag) {
-        for (const decl of node.declarationList.declarations) {
-          if (ts.isIdentifier(decl.name)) {
-            addSite(decl.name, decl, tag)
-          }
+      for (const decl of node.declarationList.declarations) {
+        if (!ts.isIdentifier(decl.name)) {
+          continue
+        }
+        const tag = findDeprecatedTag([decl]) ?? findDeprecatedTag([node])
+        if (tag) {
+          addSite(decl.name, decl, tag)
         }
       }
     } else if (ts.isFunctionDeclaration(node) && node.name) {

@@ -33,66 +33,164 @@ let cachedProgram: ts.Program | undefined
 let cachedFingerprint = ''
 let cachedOptions: ts.CompilerOptions | undefined
 
+function pathKey(p: string): string {
+  return p.replace(/\\/g, '/').toLowerCase()
+}
+
+/** Avoid picking this extension's own tsconfig when the workspace is multi-root. */
+function isDeprecatedFinderTsConfig(configPath: string): boolean {
+  return pathKey(configPath).includes('/deprecated-finder/')
+}
+
+function collectWorkspaceTsConfigPaths(): string[] {
+  const folders = vscode.workspace.workspaceFolders ?? []
+  const seen = new Set<string>()
+  const out: string[] = []
+  for (const folder of folders) {
+    const found = ts.findConfigFile(folder.uri.fsPath, ts.sys.fileExists, 'tsconfig.json')
+    if (found && !seen.has(pathKey(found))) {
+      seen.add(pathKey(found))
+      out.push(found)
+    }
+  }
+  return out
+}
+
+function tryParseTsConfig(configFilePath: string): ts.ParsedCommandLine | undefined {
+  const readResult = ts.readConfigFile(configFilePath, ts.sys.readFile)
+  if (readResult.error || !readResult.config) {
+    return undefined
+  }
+  return ts.parseJsonConfigFileContent(
+    readResult.config,
+    ts.sys,
+    path.dirname(configFilePath)
+  )
+}
+
+type TsConfigJsonShape = {
+  references?: readonly { path: string }[]
+}
+
 /**
- * Reads the nearest tsconfig.json from the workspace root and extracts its
- * compiler options. Falls back to safe defaults when no config is found.
- *
- * Using the project's own tsconfig is critical so that module resolution,
- * JSX settings, path aliases and lib declarations match exactly what the
- * project expects — otherwise symbol lookup for JSX props (e.g. antd's
- * `destroyOnClose`) fails silently, and call-expression resolution may pick
- * up incorrect overloads.
+ * Vite / TS "solution" tsconfigs often have `"files": []` and only
+ * `references` — parsing them yields **no** `paths`, `jsx`, or `moduleResolution`,
+ * so `@/` aliases and TSX fail binding. Follow `references` or a sibling
+ * `tsconfig.app.json` to obtain real compiler options.
+ */
+function expandToEffectiveParsedCommandLine(
+  rootConfigPath: string
+): { parsed: ts.ParsedCommandLine; effectiveConfigPath: string } | undefined {
+  const readResult = ts.readConfigFile(rootConfigPath, ts.sys.readFile)
+  if (readResult.error || !readResult.config) {
+    return undefined
+  }
+
+  const baseDir = path.dirname(rootConfigPath)
+  const raw = readResult.config as TsConfigJsonShape
+  let parsed = ts.parseJsonConfigFileContent(readResult.config, ts.sys, baseDir)
+  let effectiveConfigPath = rootConfigPath
+
+  const hasMeaningfulOptions =
+    parsed.fileNames.length > 0 ||
+    Boolean(parsed.options.paths && Object.keys(parsed.options.paths).length > 0)
+
+  if (!hasMeaningfulOptions && Array.isArray(raw.references)) {
+    const refPaths = raw.references
+      .map((r) => (r?.path ? path.resolve(baseDir, r.path) : ''))
+      .filter((p) => p && ts.sys.fileExists(p))
+
+    const appJson = refPaths.find(
+      (p) => path.basename(p).toLowerCase() === 'tsconfig.app.json'
+    )
+    const orderedRefs = appJson
+      ? [appJson, ...refPaths.filter((p) => p !== appJson)]
+      : refPaths
+
+    for (const refPath of orderedRefs) {
+      const refParsed = tryParseTsConfig(refPath)
+      const refOk =
+        refParsed &&
+        (refParsed.fileNames.length > 0 ||
+          Boolean(refParsed.options.paths && Object.keys(refParsed.options.paths).length > 0))
+      if (refOk && refParsed) {
+        parsed = refParsed
+        effectiveConfigPath = refPath
+        break
+      }
+    }
+  }
+
+  const stillEmpty =
+    parsed.fileNames.length === 0 &&
+    !(parsed.options.paths && Object.keys(parsed.options.paths).length > 0)
+
+  if (stillEmpty) {
+    const appPath = path.join(baseDir, 'tsconfig.app.json')
+    const appParsed = tryParseTsConfig(appPath)
+    if (
+      appParsed &&
+      (appParsed.fileNames.length > 0 ||
+        Boolean(appParsed.options.paths && Object.keys(appParsed.options.paths).length > 0))
+    ) {
+      parsed = appParsed
+      effectiveConfigPath = appPath
+    }
+  }
+
+  return { parsed, effectiveConfigPath }
+}
+
+/**
+ * Reads tsconfig(s) from the workspace and extracts compiler options. Prefers
+ * a real application tsconfig (not this repo's extension config) when the
+ * window is multi-root. Expands solution-style configs so path aliases and
+ * JSX match the app (e.g. Vite `tsconfig.json` → `tsconfig.app.json`).
  */
 function resolveCompilerOptions(): ts.CompilerOptions {
   if (cachedOptions) {
     return cachedOptions
   }
 
-  const rootDir = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath
-  if (!rootDir) {
-    cachedOptions = FALLBACK_OPTIONS
-    return FALLBACK_OPTIONS
+  const candidates = collectWorkspaceTsConfigPaths()
+  const preferred = candidates.filter((c) => !isDeprecatedFinderTsConfig(c))
+  const ordered = preferred.length > 0 ? preferred : candidates
+
+  for (const configPath of ordered) {
+    const expanded = expandToEffectiveParsedCommandLine(configPath)
+    if (!expanded) {
+      continue
+    }
+
+    const { parsed, effectiveConfigPath } = expanded
+
+    if (parsed.errors.length > 0) {
+      console.warn(
+        '[Deprecated Finder] tsconfig parse warnings:',
+        parsed.errors.map((e) => e.messageText)
+      )
+    }
+
+    console.log(`[Deprecated Finder] Using tsconfig: ${effectiveConfigPath}`)
+
+    cachedOptions = {
+      ...parsed.options,
+      allowJs: true,
+      checkJs: false,
+      noEmit: true,
+      skipLibCheck: true,
+      declaration: false,
+      declarationMap: false,
+      composite: false,
+      incremental: false
+    }
+
+    return cachedOptions
   }
 
-  const configPath = ts.findConfigFile(rootDir, ts.sys.fileExists, 'tsconfig.json')
-  if (!configPath) {
-    console.log('[Deprecated Finder] No tsconfig.json found, using fallback options')
-    cachedOptions = FALLBACK_OPTIONS
-    return FALLBACK_OPTIONS
-  }
-
-  const readResult = ts.readConfigFile(configPath, ts.sys.readFile)
-  if (readResult.error || !readResult.config) {
-    console.warn('[Deprecated Finder] Could not read tsconfig.json:', readResult.error?.messageText)
-    cachedOptions = FALLBACK_OPTIONS
-    return FALLBACK_OPTIONS
-  }
-
-  const parsed = ts.parseJsonConfigFileContent(
-    readResult.config,
-    ts.sys,
-    path.dirname(configPath)
-  )
-
-  if (parsed.errors.length > 0) {
-    console.warn('[Deprecated Finder] tsconfig.json parse warnings:', parsed.errors.map((e) => e.messageText))
-  }
-
-  console.log(`[Deprecated Finder] Using tsconfig: ${configPath}`)
-
-  cachedOptions = {
-    ...parsed.options,
-    allowJs: true,
-    checkJs: false,
-    noEmit: true,
-    skipLibCheck: true,
-    declaration: false,
-    declarationMap: false,
-    composite: false,
-    incremental: false
-  }
-
-  return cachedOptions
+  console.log('[Deprecated Finder] No tsconfig.json found, using fallback options')
+  cachedOptions = FALLBACK_OPTIONS
+  return FALLBACK_OPTIONS
 }
 
 export async function scanForDeprecated(onProgress?: ProgressCallback): Promise<DeprecatedItem[]> {
