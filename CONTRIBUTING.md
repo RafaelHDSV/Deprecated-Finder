@@ -11,7 +11,7 @@ npm run compile
 npm run lint
 ```
 
-See the [README](README.md) **Development** section for watch mode, the Extension Development Host (`F5`), and marketplace packaging. For scan toasts and the **Output** panel, see README **Settings** (`deprecatedFinder.showScanSummary`, `deprecatedFinder.verboseLogging`).
+See the [README](README.md) **Development** section for watch mode, the Extension Development Host (`F5`), and marketplace packaging. For scan toasts and the **Output** panel, see README **Settings** (`deprecatedFinder.showScanSummary`, `deprecatedFinder.verboseLogging`). For **full vs incremental scan** ordering (save during a long workspace scan), see README **Scan behavior (full workspace vs on-save)**.
 
 ## Path comparison policy
 

@@ -13,6 +13,50 @@ import {
 import { scanFileForDeprecated } from './tsDeprecatedScanner'
 import { scanWorkspaceFiles } from './workspaceScanner'
 
+/**
+ * Full workspace scan (`scanForDeprecated`) vs incremental (`scanSingleFile`):
+ * while a full scan runs, incremental updates must not call `deprecatedStore.updateFile`,
+ * or the sidebar would briefly show a mix of one fresh file and stale entries for others.
+ * See README "Scan behavior" and `context.md` (fluxo de varredura).
+ */
+let fullWorkspaceScanDepth = 0
+
+/** Normalized path key → latest absolute path for `scanSingleFile` after the outermost full scan. */
+const pendingSingleFileRescans = new Map<string, string>()
+
+/** When true, `scanSingleFile` applies results; when false and a full scan is active, it only enqueues. */
+let flushDeferredSingleFileScans = false
+
+function queueSingleFileRescan(filePath: string) {
+  pendingSingleFileRescans.set(
+    normalizePathForComparison(filePath),
+    filePath
+  )
+}
+
+async function flushPendingSingleFileRescans() {
+  if (pendingSingleFileRescans.size === 0) {
+    return
+  }
+  flushDeferredSingleFileScans = true
+  const paths = [...pendingSingleFileRescans.values()]
+  pendingSingleFileRescans.clear()
+  try {
+    for (const p of paths) {
+      await scanSingleFile(p)
+    }
+  } finally {
+    flushDeferredSingleFileScans = false
+  }
+}
+
+async function leaveFullWorkspaceScan() {
+  fullWorkspaceScanDepth--
+  if (fullWorkspaceScanDepth === 0) {
+    await flushPendingSingleFileRescans()
+  }
+}
+
 /** Progress updates for the sidebar UI (determinate file scan vs. long TS program build). */
 export type ScanProgressMessage =
   | {
@@ -286,10 +330,18 @@ function collectFromProgramWithProgress(
   return Array.from(map.values())
 }
 
+/**
+ * Full workspace scan: builds programs per tsconfig group, then replaces the in-memory
+ * list with `deprecatedStore.set`. Re-entrant safe (`fullWorkspaceScanDepth`).
+ * Single-file rescans requested during this call are queued and run after the outermost
+ * invocation completes (see `scanSingleFile`).
+ */
 export async function scanForDeprecated(
   onProgress?: ProgressCallback,
   options?: ScanForDeprecatedOptions
 ): Promise<DeprecatedItem[]> {
+  fullWorkspaceScanDepth++
+  try {
   const narrative: ScanNarrative = options?.narrative ?? 'default'
   const postFix = narrative === 'post-fix'
   const summaryMode = getShowScanSummary()
@@ -383,12 +435,25 @@ export async function scanForDeprecated(
     `[Deprecated Finder] Workspace scan: ${items.length} item(s)`
   )
   return items
+  } finally {
+    await leaveFullWorkspaceScan()
+  }
 }
 
+/**
+ * Incremental scan of one file for the sidebar / Quick Fix store.
+ * During an active `scanForDeprecated`, updates are deferred (queued) until the full
+ * scan finishes, so the UI never shows a hybrid of one fresh file and stale others.
+ */
 export async function scanSingleFile(
   filePath: string
 ): Promise<DeprecatedItem[]> {
   if (!isSupportedFile(filePath)) {
+    return []
+  }
+
+  if (!flushDeferredSingleFileScans && fullWorkspaceScanDepth > 0) {
+    queueSingleFileRescan(filePath)
     return []
   }
 

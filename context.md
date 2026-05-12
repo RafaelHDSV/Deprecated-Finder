@@ -21,6 +21,7 @@ Issue de origem: `.issues/github/ISSUE-001-deprecated-finder.md`.
 
 - **npm** como gerenciador oficial (`package-lock.json`; CI com `npm ci`)
 - Configurações `deprecatedFinder.showScanSummary` e `deprecatedFinder.verboseLogging` (`package.json` → Settings); diagnóstico verboso e avisos do scan no painel **Output → Deprecated Finder**
+- Durante `scanForDeprecated`, saves disparam `scanSingleFile` em modo **fila + flush** (sem `updateFile` intermédio) — ver `context.md` fluxo e README **Scan behavior**
 - TypeScript (`commonjs`, target ES2020)
 - VS Code Extension API (`@types/vscode ^1.100`)
 - TypeScript Compiler API (`typescript` em `dependencies`, runtime)
@@ -61,6 +62,10 @@ out/                                    # build output (gitignored)
 
 ## Fluxo de execução
 
+### Coordenação scan completo vs incremental
+
+Enquanto `scanForDeprecated` está ativo (`fullWorkspaceScanDepth > 0`), chamadas a `scanSingleFile` **não** fazem `deprecatedStore.updateFile` de imediato: o path entra numa fila deduplicada por `normalizePathForComparison`. Quando o scan completo mais externo termina (`finally` após `set`), corre-se **flush**: `scanSingleFile` para cada path em fila, atualizando ficheiros que mudaram durante o scan global. Evita lista “mista” (um ficheiro novo + resto antigo). Ver README **Scan behavior**.
+
 ```
 ativação                ┐
    ↓                    │     re-scan manual              save de arquivo
@@ -70,8 +75,8 @@ ts.createProgram        │  ts.createProgram             ts.Program (cache) ou 
    ↓                    │     ↓                            ↓
 tsDeprecatedScanner     │  tsDeprecatedScanner          tsDeprecatedScanner
    ↓                    │     ↓                            ↓
-deprecatedStore.set()   │  deprecatedStore.set()        deprecatedStore.updateFile()
-                        │     ↓
+deprecatedStore.set()   │  deprecatedStore.set()        durante scan global: fila;
+                        │     ↓                         após set: updateFile() no flush
                         │  store.onChange → re-render webview
 ```
 

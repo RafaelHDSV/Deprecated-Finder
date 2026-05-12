@@ -55,6 +55,10 @@ export function activate(context: vscode.ExtensionContext) {
   )
 
   context.subscriptions.push(
+    /**
+     * After a fix, refresh that file in the store. If a full workspace scan is running,
+     * `scanSingleFile` defers the store update until the global scan completes (see README).
+     */
     vscode.commands.registerCommand(
       'deprecatedFinder.fixItem',
       async (itemId: string) => {
@@ -125,6 +129,10 @@ export function activate(context: vscode.ExtensionContext) {
   )
 
   context.subscriptions.push(
+    /**
+     * Save → incremental scan. If a full `scanForDeprecated` is in flight, the scanner
+     * defers `updateFile` and flushes after the global `set` — see README "Scan behavior".
+     */
     vscode.workspace.onDidSaveTextDocument(async (document) => {
       if (document.uri.scheme !== 'file') {
         return

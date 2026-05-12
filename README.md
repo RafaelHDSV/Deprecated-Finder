@@ -32,6 +32,21 @@ Example: Ant Design Modal v4 → v5
 5. Click **Fix** on a single item, or **Fix all** to apply every available replacement.
 6. Use the lightbulb (`Ctrl+.`) on a deprecated symbol to apply the fix inline.
 
+### Scan behavior (full workspace vs on-save)
+
+The extension runs two kinds of scan:
+
+| Kind | Trigger | Store update |
+|---|---|---|
+| **Full workspace** | Activation, **Re-scan**, post–**Fix all** | `deprecatedStore.set(...)` **once** at the end, replacing the whole list. |
+| **Single file** | **Save** (supported languages), after **Fix** on one item | `deprecatedStore.updateFile(...)` merges that file into the current list. |
+
+**Why this matters:** If `updateFile` ran while a full scan was still building its in-memory result, the sidebar could briefly show a **mixed** state: one file already refreshed from the save handler while every other file still reflected the **previous** scan. That looked like a broken or partial list.
+
+**What we do instead:** While `scanForDeprecated` is in progress (including nested full scans), `scanSingleFile` **does not** call `updateFile`. It records the path in a small **queue** (deduped by normalized path). When the **outermost** full scan finishes and runs `set(...)`, the extension **flushes** the queue by running `scanSingleFile` again for each path, so saves and per-item fixes still land in the store—just **after** the global snapshot is coherent.
+
+**What you might notice:** On a very large workspace, if you save repeatedly during a long full scan, the list for those files updates in a **batch** right after the full scan completes (not necessarily on every intermediate save). The loading banner from the full scan still reflects global progress; the narrow “Re-scanning after save” strip is unchanged for saves outside a full scan.
+
 ### Available commands
 
 Every `deprecatedFinder.*` command is listed below. **Visible in Command Palette** means it appears in `Ctrl+Shift+P`. Commands marked **No** are hidden there (`when: false` in `package.json`) so the palette stays short; they still run from the sidebar, tabular panel, Quick Fix, and from `vscode.commands.executeCommand()` (including custom keybindings you add in `keybindings.json`).
@@ -79,6 +94,8 @@ Configure in **Settings** (`Ctrl+,`) under **Deprecated Finder**, or in `setting
 |---|---|---|---|
 | `deprecatedFinder.showScanSummary` | `always` \| `whenIssuesFound` \| `never` | `whenIssuesFound` | When to show the information toast after a **full workspace** scan that found source files. `whenIssuesFound` only notifies if at least one deprecated usage exists. **`never`** suppresses that summary toast. The **«no source files in workspace»** toast still appears when the glob finds no files (empty or non-matching workspace). |
 | `deprecatedFinder.verboseLogging` | boolean | `false` | When `true`, append detailed scan lines (per tsconfig program group, workspace total, per-file single-file scan) to **View → Output → Deprecated Finder**. Warnings (e.g. could not load a source file, tsconfig parse warnings) are written to that channel whenever they occur, without a toast. |
+
+**Related:** see **Scan behavior (full workspace vs on-save)** above for how saves interact with a scan in progress.
 
 ## Compatibility
 
