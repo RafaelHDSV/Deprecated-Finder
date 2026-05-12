@@ -3,6 +3,7 @@ import * as ts from 'typescript'
 import * as vscode from 'vscode'
 import { DeprecatedItem } from '../model/DeprecatedItem'
 import { deprecatedStore } from '../state/deprecatedStore'
+import { normalizePathForComparison } from '../util/pathComparison'
 import { scanFileForDeprecated } from './tsDeprecatedScanner'
 import { scanWorkspaceFiles } from './workspaceScanner'
 
@@ -146,10 +147,6 @@ function expandToEffectiveParsedCommandLine(
   return { parsed, effectiveConfigPath }
 }
 
-function normalizePathKey(filePath: string): string {
-  return filePath.replace(/\\/g, '/').toLowerCase()
-}
-
 function getExpandedForSourceFile(
   sourceFilePath: string
 ): { parsed: ts.ParsedCommandLine; effectiveConfigPath: string } | undefined {
@@ -161,7 +158,7 @@ function getExpandedForSourceFile(
   if (!root) {
     return undefined
   }
-  const rootKey = normalizePathKey(root)
+  const rootKey = normalizePathForComparison(root)
   const hit = expandedConfigByRoot.get(rootKey)
   if (hit) {
     return hit
@@ -181,14 +178,14 @@ function getExpandedForSourceFile(
  * symbol resolution misses library deprecations (antd props, icon imports).
  */
 function configGroupKeyForFile(filePath: string): string {
-  const fk = normalizePathKey(filePath)
+  const fk = normalizePathForComparison(filePath)
   const memo = configGroupKeyByFile.get(fk)
   if (memo) {
     return memo
   }
   const expanded = getExpandedForSourceFile(filePath)
   const key = expanded
-    ? normalizePathKey(expanded.effectiveConfigPath)
+    ? normalizePathForComparison(expanded.effectiveConfigPath)
     : '__no_tsconfig__'
   configGroupKeyByFile.set(fk, key)
   return key
@@ -430,10 +427,10 @@ function getSourceFileForPath(
     return direct
   }
 
-  const target = normalizePathKey(filePath)
+  const target = normalizePathForComparison(filePath)
   return program
     .getSourceFiles()
-    .find((sf) => normalizePathKey(sf.fileName) === target)
+    .find((sf) => normalizePathForComparison(sf.fileName) === target)
 }
 
 export function invalidateProgramCache() {

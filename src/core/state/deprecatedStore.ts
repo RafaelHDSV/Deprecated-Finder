@@ -1,4 +1,5 @@
 import { DeprecatedItem } from '../model/DeprecatedItem'
+import { normalizePathForComparison } from '../util/pathComparison'
 
 type Listener = () => void
 
@@ -12,18 +13,18 @@ class DeprecatedStore {
   }
 
   updateFile(filePath: string, items: DeprecatedItem[]) {
-    const normalized = normalizePath(filePath)
+    const normalized = normalizePathForComparison(filePath)
     this.items = this.items.filter(
-      (item) => normalizePath(item.filePath) !== normalized
+      (item) => normalizePathForComparison(item.filePath) !== normalized
     )
     this.items.push(...items)
     this.emit()
   }
 
   removeFile(filePath: string) {
-    const normalized = normalizePath(filePath)
+    const normalized = normalizePathForComparison(filePath)
     this.items = this.items.filter(
-      (item) => normalizePath(item.filePath) !== normalized
+      (item) => normalizePathForComparison(item.filePath) !== normalized
     )
     this.emit()
   }
@@ -51,10 +52,6 @@ class DeprecatedStore {
       listener()
     }
   }
-}
-
-function normalizePath(filePath: string): string {
-  return filePath.replace(/\\/g, '/').toLowerCase()
 }
 
 export const deprecatedStore = new DeprecatedStore()

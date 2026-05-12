@@ -69,6 +69,8 @@ For a clean clone matching CI exactly, use `npm ci` instead of `npm install`.
 
 Open **Run and Debug** (or press `F5`) and choose **Run Extension** to open the **Extension Development Host** with this extension loaded. The workspace ships `.vscode/launch.json` and `.vscode/tasks.json`, so you do not need to recreate them after cloning.
 
+Contributors: see [CONTRIBUTING.md](CONTRIBUTING.md) for **path comparison rules** (cross-platform) and contribution notes.
+
 ## Compatibility
 
 - VS Code `>= 1.100.0`

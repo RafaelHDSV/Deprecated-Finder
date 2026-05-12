@@ -1,6 +1,7 @@
 import * as vscode from 'vscode'
 import { deprecatedStore } from '../core/state/deprecatedStore'
 import { DeprecatedItem } from '../core/model/DeprecatedItem'
+import { normalizePathForComparison } from '../core/util/pathComparison'
 
 export class DeprecatedCodeActionProvider implements vscode.CodeActionProvider {
   public static readonly providedKinds = [vscode.CodeActionKind.QuickFix]
@@ -11,7 +12,11 @@ export class DeprecatedCodeActionProvider implements vscode.CodeActionProvider {
   ): vscode.CodeAction[] {
     const items = deprecatedStore
       .getAll()
-      .filter((item) => normalize(item.filePath) === normalize(document.fileName))
+      .filter(
+        (item) =>
+          normalizePathForComparison(item.filePath) ===
+          normalizePathForComparison(document.fileName)
+      )
 
     const actions: vscode.CodeAction[] = []
 
@@ -64,8 +69,4 @@ function intersectsItem(
   return Boolean(range.intersection(itemRange)) ||
     range.contains(itemRange) ||
     itemRange.contains(range)
-}
-
-function normalize(filePath: string): string {
-  return filePath.replace(/\\/g, '/').toLowerCase()
 }

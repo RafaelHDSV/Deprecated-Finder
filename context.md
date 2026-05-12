@@ -42,6 +42,8 @@ src/
       importResolver.ts                 # identifica import de origem do símbolo
     fix/
       fixEngine.ts                      # WorkspaceEdit: identificador + import
+    util/
+      pathComparison.ts                 # normalizePathForComparison (Win vs POSIX)
   providers/
     DeprecatedViewProvider.ts           # webview da sidebar (lista agrupada por arquivo)
     DeprecatedCodeActionProvider.ts     # Quick Fix lightbulb no editor
@@ -77,6 +79,7 @@ deprecatedStore.set()   │  deprecatedStore.set()        deprecatedStore.update
 - Indentação: **2 espaços**.
 - Comentários só onde explicam intent / trade-off, nunca narrando o código.
 - Logs de debug usam o prefixo `[Deprecated Finder]`.
+- **Comparação de caminhos** entre APIs (VS Code / TypeScript): ver `CONTRIBUTING.md` e `src/core/util/pathComparison.ts` (`normalizePathForComparison`).
 
 ## Comandos VS Code expostos
 
