@@ -299,8 +299,8 @@ export async function scanForDeprecated(
       kind: 'indeterminate',
       message:
         groupCount > 1
-          ? `Building TypeScript program (${groupIndex}/${groupCount})…`
-          : 'Building TypeScript program…',
+          ? `Building program (${groupIndex}/${groupCount})…`
+          : 'Building program…',
       fileCount: 0
     })
 
