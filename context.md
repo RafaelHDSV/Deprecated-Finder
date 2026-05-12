@@ -19,6 +19,7 @@ Issue de origem: `.issues/github/ISSUE-001-deprecated-finder.md`.
 
 ## Stack
 
+- **npm** como gerenciador oficial (`package-lock.json`; CI com `npm ci`)
 - TypeScript (`commonjs`, target ES2020)
 - VS Code Extension API (`@types/vscode ^1.100`)
 - TypeScript Compiler API (`typescript` em `dependencies`, runtime)
@@ -105,9 +106,9 @@ deprecatedStore.set()   │  deprecatedStore.set()        deprecatedStore.update
 ## Build & publicação
 
 ```bash
-yarn install
-yarn compile         # tsc → ./out
-yarn lint
+npm install          # ou `npm ci` em clone limpo (igual ao CI)
+npm run compile      # tsc → ./out
+npm run lint
 ```
 
 Para empacotar: `npx vsce package`. Para publicar no Marketplace: `npx vsce publish` (requer publisher configurado).

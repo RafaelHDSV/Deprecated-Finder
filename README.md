@@ -55,11 +55,13 @@ When no pattern matches, the item still appears in the list but the **Fix** butt
 ## Development
 
 ```bash
-yarn install
-yarn compile          # one-shot build into ./out
-yarn watch            # watch mode
-yarn lint             # eslint
+npm install
+npm run compile       # one-shot build into ./out
+npm run watch         # watch mode
+npm run lint          # eslint
 ```
+
+For a clean clone matching CI exactly, use `npm ci` instead of `npm install`.
 
 Press `F5` from VS Code to launch the **Extension Development Host** with the extension loaded.
 
