@@ -1,10 +1,10 @@
-import * as ts from 'typescript'
 import * as path from 'path'
+import * as ts from 'typescript'
 import * as vscode from 'vscode'
-import { scanWorkspaceFiles } from './workspaceScanner'
+import { DeprecatedItem } from '../model/DeprecatedItem'
 import { deprecatedStore } from '../state/deprecatedStore'
 import { scanFileForDeprecated } from './tsDeprecatedScanner'
-import { DeprecatedItem } from '../model/DeprecatedItem'
+import { scanWorkspaceFiles } from './workspaceScanner'
 
 /** Progress updates for the sidebar UI (determinate file scan vs. long TS program build). */
 export type ScanProgressMessage =
@@ -29,32 +29,14 @@ const FALLBACK_OPTIONS: ts.CompilerOptions = {
   noEmit: true
 }
 
-let cachedProgram: ts.Program | undefined
-let cachedFingerprint = ''
-let cachedOptions: ts.CompilerOptions | undefined
+/** `normalize(root tsconfig path)` → expanded parse result */
+const expandedConfigByRoot = new Map<
+  string,
+  { parsed: ts.ParsedCommandLine; effectiveConfigPath: string }
+>()
 
-function pathKey(p: string): string {
-  return p.replace(/\\/g, '/').toLowerCase()
-}
-
-/** Avoid picking this extension's own tsconfig when the workspace is multi-root. */
-function isDeprecatedFinderTsConfig(configPath: string): boolean {
-  return pathKey(configPath).includes('/deprecated-finder/')
-}
-
-function collectWorkspaceTsConfigPaths(): string[] {
-  const folders = vscode.workspace.workspaceFolders ?? []
-  const seen = new Set<string>()
-  const out: string[] = []
-  for (const folder of folders) {
-    const found = ts.findConfigFile(folder.uri.fsPath, ts.sys.fileExists, 'tsconfig.json')
-    if (found && !seen.has(pathKey(found))) {
-      seen.add(pathKey(found))
-      out.push(found)
-    }
-  }
-  return out
-}
+/** `normalize(source file path)` → config group key */
+const configGroupKeyByFile = new Map<string, string>()
 
 function tryParseTsConfig(configFilePath: string): ts.ParsedCommandLine | undefined {
   const readResult = ts.readConfigFile(configFilePath, ts.sys.readFile)
@@ -141,56 +123,110 @@ function expandToEffectiveParsedCommandLine(
   return { parsed, effectiveConfigPath }
 }
 
-/**
- * Reads tsconfig(s) from the workspace and extracts compiler options. Prefers
- * a real application tsconfig (not this repo's extension config) when the
- * window is multi-root. Expands solution-style configs so path aliases and
- * JSX match the app (e.g. Vite `tsconfig.json` → `tsconfig.app.json`).
- */
-function resolveCompilerOptions(): ts.CompilerOptions {
-  if (cachedOptions) {
-    return cachedOptions
+function normalizePathKey(filePath: string): string {
+  return filePath.replace(/\\/g, '/').toLowerCase()
+}
+
+function getExpandedForSourceFile(sourceFilePath: string):
+  | { parsed: ts.ParsedCommandLine; effectiveConfigPath: string }
+  | undefined {
+  const root = ts.findConfigFile(path.dirname(sourceFilePath), ts.sys.fileExists, 'tsconfig.json')
+  if (!root) {
+    return undefined
   }
+  const rootKey = normalizePathKey(root)
+  const hit = expandedConfigByRoot.get(rootKey)
+  if (hit) {
+    return hit
+  }
+  const expanded = expandToEffectiveParsedCommandLine(root)
+  if (!expanded) {
+    return undefined
+  }
+  expandedConfigByRoot.set(rootKey, expanded)
+  return expanded
+}
 
-  const candidates = collectWorkspaceTsConfigPaths()
-  const preferred = candidates.filter((c) => !isDeprecatedFinderTsConfig(c))
-  const ordered = preferred.length > 0 ? preferred : candidates
+/**
+ * One program must not mix files that belong to different tsconfig projects:
+ * the first matching workspace tsconfig would otherwise apply wrong
+ * `paths` / `moduleResolution` (e.g. backend config on frontend files), and
+ * symbol resolution misses library deprecations (antd props, icon imports).
+ */
+function configGroupKeyForFile(filePath: string): string {
+  const fk = normalizePathKey(filePath)
+  const memo = configGroupKeyByFile.get(fk)
+  if (memo) {
+    return memo
+  }
+  const expanded = getExpandedForSourceFile(filePath)
+  const key = expanded ? normalizePathKey(expanded.effectiveConfigPath) : '__no_tsconfig__'
+  configGroupKeyByFile.set(fk, key)
+  return key
+}
 
-  for (const configPath of ordered) {
-    const expanded = expandToEffectiveParsedCommandLine(configPath)
-    if (!expanded) {
+function groupWorkspaceFilesByTsConfig(filePaths: string[]): Map<string, string[]> {
+  const groups = new Map<string, string[]>()
+  for (const fp of filePaths) {
+    const key = configGroupKeyForFile(fp)
+    const list = groups.get(key) ?? []
+    list.push(fp)
+    groups.set(key, list)
+  }
+  return groups
+}
+
+function buildScanCompilerOptions(parsed: ts.ParsedCommandLine): ts.CompilerOptions {
+  if (parsed.errors.length > 0) {
+    console.warn(
+      '[Deprecated Finder] tsconfig parse warnings:',
+      parsed.errors.map((e) => e.messageText)
+    )
+  }
+  return {
+    ...parsed.options,
+    allowJs: true,
+    checkJs: false,
+    noEmit: true,
+    skipLibCheck: true,
+    declaration: false,
+    declarationMap: false,
+    composite: false,
+    incremental: false
+  }
+}
+
+function collectFromProgramWithProgress(
+  program: ts.Program,
+  allowedPaths: Set<string>,
+  onProgress: ProgressCallback | undefined,
+  progress: { current: number; total: number }
+): DeprecatedItem[] {
+  const map = new Map<string, DeprecatedItem>()
+
+  for (const sourceFile of program.getSourceFiles()) {
+    const fileName = sourceFile.fileName
+    if (fileName.includes('node_modules')) {
+      continue
+    }
+    if (!allowedPaths.has(normalizePathKey(fileName))) {
       continue
     }
 
-    const { parsed, effectiveConfigPath } = expanded
-
-    if (parsed.errors.length > 0) {
-      console.warn(
-        '[Deprecated Finder] tsconfig parse warnings:',
-        parsed.errors.map((e) => e.messageText)
-      )
+    const items = scanFileForDeprecated(fileName, program, sourceFile)
+    for (const item of items) {
+      map.set(item.id, item)
     }
 
-    console.log(`[Deprecated Finder] Using tsconfig: ${effectiveConfigPath}`)
-
-    cachedOptions = {
-      ...parsed.options,
-      allowJs: true,
-      checkJs: false,
-      noEmit: true,
-      skipLibCheck: true,
-      declaration: false,
-      declarationMap: false,
-      composite: false,
-      incremental: false
-    }
-
-    return cachedOptions
+    progress.current++
+    onProgress?.({
+      kind: 'determinate',
+      current: progress.current,
+      total: progress.total
+    })
   }
 
-  console.log('[Deprecated Finder] No tsconfig.json found, using fallback options')
-  cachedOptions = FALLBACK_OPTIONS
-  return FALLBACK_OPTIONS
+  return Array.from(map.values())
 }
 
 export async function scanForDeprecated(onProgress?: ProgressCallback): Promise<DeprecatedItem[]> {
@@ -214,15 +250,37 @@ export async function scanForDeprecated(onProgress?: ProgressCallback): Promise<
 
   onProgress?.({
     kind: 'indeterminate',
-    message: 'Building TypeScript program (parsing & binding)…',
+    message: 'Grouping files by nearest tsconfig & building programs…',
     fileCount: filePaths.length
   })
 
-  const program = createProgram(filePaths)
+  const groups = groupWorkspaceFilesByTsConfig(filePaths)
+  const progress = { current: 0, total: filePaths.length }
+  const map = new Map<string, DeprecatedItem>()
 
   onProgress?.({ kind: 'determinate', current: 0, total: filePaths.length })
 
-  const items = collectFromProgramWithProgress(program, filePaths, onProgress)
+  for (const [groupKey, paths] of groups) {
+    const expanded =
+      groupKey === '__no_tsconfig__'
+        ? undefined
+        : getExpandedForSourceFile(paths[0] ?? '')
+    const options = expanded ? buildScanCompilerOptions(expanded.parsed) : FALLBACK_OPTIONS
+    const effectiveLabel = expanded?.effectiveConfigPath ?? '(fallback options)'
+
+    console.log(
+      `[Deprecated Finder] Program for group "${groupKey}": ${paths.length} file(s); tsconfig: ${effectiveLabel}`
+    )
+
+    const program = ts.createProgram(paths, options)
+    const allowed = new Set(paths.map((p) => normalizePathKey(p)))
+    const chunk = collectFromProgramWithProgress(program, allowed, onProgress, progress)
+    for (const item of chunk) {
+      map.set(item.id, item)
+    }
+  }
+
+  const items = Array.from(map.values())
 
   deprecatedStore.set(items)
 
@@ -239,24 +297,20 @@ export async function scanSingleFile(filePath: string): Promise<DeprecatedItem[]
     return []
   }
 
-  let program = cachedProgram
-  if (!program) {
-    const files = await scanWorkspaceFiles()
-    if (files.length === 0) {
-      return []
-    }
-    program = createProgram(files.map((f) => f.fsPath))
+  const files = await scanWorkspaceFiles()
+  if (files.length === 0) {
+    return []
   }
 
-  // The cached program has a snapshot of the file at the time it was created.
-  // For a save-triggered re-scan, we create a fresh program with the same
-  // root files so the saved content is picked up.
-  const freshProgram = ts.createProgram(
-    program.getRootFileNames() as string[],
-    resolveCompilerOptions(),
-    undefined,
-    program
-  )
+  const allPaths = files.map((f) => f.fsPath)
+  const groupKey = configGroupKeyForFile(filePath)
+  const groupPaths = allPaths.filter((p) => configGroupKeyForFile(p) === groupKey)
+
+  const expanded =
+    groupKey === '__no_tsconfig__' ? undefined : getExpandedForSourceFile(filePath)
+  const options = expanded ? buildScanCompilerOptions(expanded.parsed) : FALLBACK_OPTIONS
+
+  const freshProgram = ts.createProgram(groupPaths, options)
 
   const sourceFile = getSourceFileForPath(freshProgram, filePath)
   if (!sourceFile) {
@@ -270,74 +324,26 @@ export async function scanSingleFile(filePath: string): Promise<DeprecatedItem[]
   return items
 }
 
-function collectFromProgramWithProgress(
-  program: ts.Program,
-  filePaths: string[],
-  onProgress?: ProgressCallback
-): DeprecatedItem[] {
-  const filePathSet = new Set(filePaths.map((p) => normalize(p)))
-  const map = new Map<string, DeprecatedItem>()
-  let processed = 0
-
-  for (const sourceFile of program.getSourceFiles()) {
-    const fileName = sourceFile.fileName
-    if (fileName.includes('node_modules')) {
-      continue
-    }
-    if (!filePathSet.has(normalize(fileName))) {
-      continue
-    }
-
-    const items = scanFileForDeprecated(fileName, program, sourceFile)
-    for (const item of items) {
-      map.set(item.id, item)
-    }
-
-    processed++
-    onProgress?.({ kind: 'determinate', current: processed, total: filePaths.length })
-  }
-
-  return Array.from(map.values())
-}
-
 function getSourceFileForPath(
   program: ts.Program,
   filePath: string
 ): ts.SourceFile | undefined {
   const direct =
-    program.getSourceFile(filePath) ??
-    program.getSourceFile(path.normalize(filePath))
+    program.getSourceFile(filePath) ?? program.getSourceFile(path.normalize(filePath))
 
   if (direct) {
     return direct
   }
 
-  const target = normalize(filePath)
-  return program.getSourceFiles().find((sf) => normalize(sf.fileName) === target)
-}
-
-function createProgram(filePaths: string[]): ts.Program {
-  const fingerprint = filePaths.slice().sort().join('|')
-  if (cachedProgram && fingerprint === cachedFingerprint) {
-    return cachedProgram
-  }
-
-  const options = resolveCompilerOptions()
-  cachedProgram = ts.createProgram(filePaths, options)
-  cachedFingerprint = fingerprint
-  return cachedProgram
+  const target = normalizePathKey(filePath)
+  return program.getSourceFiles().find((sf) => normalizePathKey(sf.fileName) === target)
 }
 
 export function invalidateProgramCache() {
-  cachedProgram = undefined
-  cachedFingerprint = ''
-  cachedOptions = undefined
+  expandedConfigByRoot.clear()
+  configGroupKeyByFile.clear()
 }
 
 function isSupportedFile(filePath: string): boolean {
   return /\.(ts|tsx|js|jsx)$/i.test(filePath)
-}
-
-function normalize(filePath: string): string {
-  return filePath.replace(/\\/g, '/').toLowerCase()
 }
