@@ -216,23 +216,33 @@ function buildScanCompilerOptions(
   }
 }
 
+/**
+ * Walks explicit workspace paths (not `program.getSourceFiles()`), so the
+ * first progress tick happens as soon as real analysis starts — otherwise
+ * thousands of `node_modules` entries can delay the counter and leave the
+ * UI stuck at 0 / N during heavy `createProgram` work.
+ */
 function collectFromProgramWithProgress(
   program: ts.Program,
-  allowedPaths: Set<string>,
+  pathsInGroup: string[],
   onProgress: ProgressCallback | undefined,
   progress: { current: number; total: number }
 ): DeprecatedItem[] {
   const map = new Map<string, DeprecatedItem>()
 
-  for (const sourceFile of program.getSourceFiles()) {
-    const fileName = sourceFile.fileName
-    if (fileName.includes('node_modules')) {
-      continue
-    }
-    if (!allowedPaths.has(normalizePathKey(fileName))) {
+  for (const fp of pathsInGroup) {
+    const sourceFile = getSourceFileForPath(program, fp)
+    if (!sourceFile || sourceFile.fileName.includes('node_modules')) {
+      progress.current++
+      onProgress?.({
+        kind: 'determinate',
+        current: Math.min(progress.current, progress.total),
+        total: progress.total
+      })
       continue
     }
 
+    const fileName = sourceFile.fileName
     const items = scanFileForDeprecated(fileName, program, sourceFile)
     for (const item of items) {
       map.set(item.id, item)
@@ -241,7 +251,7 @@ function collectFromProgramWithProgress(
     progress.current++
     onProgress?.({
       kind: 'determinate',
-      current: progress.current,
+      current: Math.min(progress.current, progress.total),
       total: progress.total
     })
   }
@@ -272,17 +282,28 @@ export async function scanForDeprecated(
 
   onProgress?.({
     kind: 'indeterminate',
-    message: 'Grouping files by nearest tsconfig & building programs…',
-    fileCount: filePaths.length
+    message: `Preparing scan (${filePaths.length} source files)…`,
+    fileCount: 0
   })
 
   const groups = groupWorkspaceFilesByTsConfig(filePaths)
   const progress = { current: 0, total: filePaths.length }
   const map = new Map<string, DeprecatedItem>()
 
-  onProgress?.({ kind: 'determinate', current: 0, total: filePaths.length })
+  let groupIndex = 0
+  const groupCount = groups.size
 
   for (const [groupKey, paths] of groups) {
+    groupIndex++
+    onProgress?.({
+      kind: 'indeterminate',
+      message:
+        groupCount > 1
+          ? `Building TypeScript program (${groupIndex}/${groupCount})…`
+          : 'Building TypeScript program…',
+      fileCount: 0
+    })
+
     const expanded =
       groupKey === '__no_tsconfig__'
         ? undefined
@@ -297,10 +318,9 @@ export async function scanForDeprecated(
     )
 
     const program = ts.createProgram(paths, options)
-    const allowed = new Set(paths.map((p) => normalizePathKey(p)))
     const chunk = collectFromProgramWithProgress(
       program,
-      allowed,
+      paths,
       onProgress,
       progress
     )
