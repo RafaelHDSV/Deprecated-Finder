@@ -8,6 +8,12 @@ export interface FixSummary {
   files: number
 }
 
+export type FixAllProgress = (update: {
+  phase: 'editing' | 'saving'
+  current: number
+  total: number
+}) => void
+
 /**
  * Applies a fix for a single deprecated item. Returns true when something was
  * actually applied. The current scope rewrites:
@@ -44,7 +50,10 @@ export async function fixItem(item: DeprecatedItem): Promise<boolean> {
  * Applies fixes for several deprecated items. Items without suggestion are
  * skipped. Edits are batched per file to avoid offset drift.
  */
-export async function fixAll(items: DeprecatedItem[]): Promise<FixSummary> {
+export async function fixAll(
+  items: DeprecatedItem[],
+  onProgress?: FixAllProgress
+): Promise<FixSummary> {
   const fixable = items.filter((item) => item.suggestion)
   const skipped = items.length - fixable.length
 
@@ -56,8 +65,10 @@ export async function fixAll(items: DeprecatedItem[]): Promise<FixSummary> {
   const edit = new vscode.WorkspaceEdit()
   const touchedDocs: vscode.TextDocument[] = []
   let fixed = 0
+  const fileEntries = Array.from(byFile.entries())
+  const totalFiles = fileEntries.length
 
-  for (const [filePath, fileItems] of byFile.entries()) {
+  for (const [filePath, fileItems] of fileEntries) {
     const uri = vscode.Uri.file(filePath)
     const document = await vscode.workspace.openTextDocument(uri)
     touchedDocs.push(document)
@@ -80,6 +91,12 @@ export async function fixAll(items: DeprecatedItem[]): Promise<FixSummary> {
         }
       }
     }
+
+    onProgress?.({
+      phase: 'editing',
+      current: touchedDocs.length,
+      total: totalFiles
+    })
   }
 
   const success = await vscode.workspace.applyEdit(edit)
@@ -87,8 +104,14 @@ export async function fixAll(items: DeprecatedItem[]): Promise<FixSummary> {
     return { fixed: 0, skipped, files: 0 }
   }
 
-  for (const doc of touchedDocs) {
-    await doc.save()
+  const saveTotal = touchedDocs.length
+  for (let i = 0; i < touchedDocs.length; i++) {
+    await touchedDocs[i].save()
+    onProgress?.({
+      phase: 'saving',
+      current: i + 1,
+      total: saveTotal
+    })
   }
 
   return { fixed, skipped, files: touchedDocs.length }

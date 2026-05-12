@@ -14,9 +14,22 @@ export type ScanProgressMessage =
       /** Total root files once known; 0 while still searching */
       fileCount: number
     }
-  | { kind: 'determinate'; current: number; total: number }
+  | {
+      kind: 'determinate'
+      current: number
+      total: number
+      /** Full status line; when set, the webview uses this instead of the default "Analyzing …" text. */
+      statusText?: string
+    }
 
 export type ProgressCallback = (update: ScanProgressMessage) => void
+
+/** Wording for the full-workspace scan phase (e.g. after Fix all). */
+export type ScanNarrative = 'default' | 'post-fix'
+
+export interface ScanForDeprecatedOptions {
+  narrative?: ScanNarrative
+}
 
 const FALLBACK_OPTIONS: ts.CompilerOptions = {
   allowJs: true,
@@ -226,9 +239,11 @@ function collectFromProgramWithProgress(
   program: ts.Program,
   pathsInGroup: string[],
   onProgress: ProgressCallback | undefined,
-  progress: { current: number; total: number }
+  progress: { current: number; total: number },
+  narrative: ScanNarrative
 ): DeprecatedItem[] {
   const map = new Map<string, DeprecatedItem>()
+  const determinatePrefix = narrative === 'post-fix' ? 'Re-scanning workspace' : undefined
 
   for (const fp of pathsInGroup) {
     const sourceFile = getSourceFileForPath(program, fp)
@@ -237,7 +252,11 @@ function collectFromProgramWithProgress(
       onProgress?.({
         kind: 'determinate',
         current: Math.min(progress.current, progress.total),
-        total: progress.total
+        total: progress.total,
+        statusText:
+          determinatePrefix !== undefined
+            ? `${determinatePrefix}: ${Math.min(progress.current, progress.total)} / ${progress.total} files…`
+            : undefined
       })
       continue
     }
@@ -252,7 +271,11 @@ function collectFromProgramWithProgress(
     onProgress?.({
       kind: 'determinate',
       current: Math.min(progress.current, progress.total),
-      total: progress.total
+      total: progress.total,
+      statusText:
+        determinatePrefix !== undefined
+          ? `${determinatePrefix}: ${Math.min(progress.current, progress.total)} / ${progress.total} files…`
+          : undefined
     })
   }
 
@@ -260,11 +283,17 @@ function collectFromProgramWithProgress(
 }
 
 export async function scanForDeprecated(
-  onProgress?: ProgressCallback
+  onProgress?: ProgressCallback,
+  options?: ScanForDeprecatedOptions
 ): Promise<DeprecatedItem[]> {
+  const narrative: ScanNarrative = options?.narrative ?? 'default'
+  const postFix = narrative === 'post-fix'
+
   onProgress?.({
     kind: 'indeterminate',
-    message: 'Searching workspace for source files…',
+    message: postFix
+      ? 'Re-scanning workspace: locating source files…'
+      : 'Searching workspace for source files…',
     fileCount: 0
   })
 
@@ -282,7 +311,9 @@ export async function scanForDeprecated(
 
   onProgress?.({
     kind: 'indeterminate',
-    message: `Preparing scan (${filePaths.length} source files)…`,
+    message: postFix
+      ? `Re-scanning workspace: preparing (${filePaths.length} source files)…`
+      : `Preparing scan (${filePaths.length} source files)…`,
     fileCount: 0
   })
 
@@ -297,10 +328,13 @@ export async function scanForDeprecated(
     groupIndex++
     onProgress?.({
       kind: 'indeterminate',
-      message:
-        groupCount > 1
-          ? `Building program (${groupIndex}/${groupCount})…`
-          : 'Building program…',
+      message: postFix
+        ? groupCount > 1
+          ? `Re-scanning workspace: building TypeScript programs (${groupIndex}/${groupCount})…`
+          : 'Re-scanning workspace: building TypeScript program…'
+        : groupCount > 1
+          ? `Building TypeScript program (${groupIndex}/${groupCount})…`
+          : 'Building TypeScript program…',
       fileCount: 0
     })
 
@@ -308,7 +342,7 @@ export async function scanForDeprecated(
       groupKey === '__no_tsconfig__'
         ? undefined
         : getExpandedForSourceFile(paths[0] ?? '')
-    const options = expanded
+    const compilerOptions = expanded
       ? buildScanCompilerOptions(expanded.parsed)
       : FALLBACK_OPTIONS
     const effectiveLabel = expanded?.effectiveConfigPath ?? '(fallback options)'
@@ -317,12 +351,13 @@ export async function scanForDeprecated(
       `[Deprecated Finder] Program for group "${groupKey}": ${paths.length} file(s); tsconfig: ${effectiveLabel}`
     )
 
-    const program = ts.createProgram(paths, options)
+    const program = ts.createProgram(paths, compilerOptions)
     const chunk = collectFromProgramWithProgress(
       program,
       paths,
       onProgress,
-      progress
+      progress,
+      narrative
     )
     for (const item of chunk) {
       map.set(item.id, item)

@@ -31,7 +31,7 @@ export function activate(context: vscode.ExtensionContext) {
   context.subscriptions.push(
     vscode.commands.registerCommand('deprecatedFinder.scan', async () => {
       invalidateProgramCache()
-      provider.setLoading(true)
+      provider.setLoading(true, 'Scanning workspace for deprecated APIs…')
       try {
         await scanForDeprecated((update) => {
           provider.postProgress(update)
@@ -59,18 +59,13 @@ export function activate(context: vscode.ExtensionContext) {
           )
           return
         }
-        provider.setLoading(true)
-        provider.postProgress({
-          kind: 'indeterminate',
-          message: 'Applying fix…',
-          fileCount: 0
-        })
+        provider.setLoading(true, 'Applying fix…')
         try {
           const ok = await fixItem(item)
           if (ok) {
             provider.postProgress({
               kind: 'indeterminate',
-              message: 'Updating list for this file…',
+              message: 'Applying fix: refreshing this file in the list…',
               fileCount: 0
             })
             await scanSingleFile(item.filePath)
@@ -85,14 +80,19 @@ export function activate(context: vscode.ExtensionContext) {
   context.subscriptions.push(
     vscode.commands.registerCommand('deprecatedFinder.fixAll', async () => {
       const items = deprecatedStore.getAll()
-      provider.setLoading(true)
-      provider.postProgress({
-        kind: 'indeterminate',
-        message: 'Applying fixes to the workspace…',
-        fileCount: 0
-      })
+      provider.setLoading(true, 'Applying fixes to the workspace…')
       try {
-        const summary = await fixAll(items)
+        const summary = await fixAll(items, (p) => {
+          const message =
+            p.phase === 'editing'
+              ? `Applying fixes: preparing edits (${p.current} / ${p.total} files)…`
+              : `Applying fixes: saving (${p.current} / ${p.total} files)…`
+          provider.postProgress({
+            kind: 'indeterminate',
+            message,
+            fileCount: 0
+          })
+        })
         vscode.window.showInformationMessage(
           `Deprecated Finder: fixed ${summary.fixed} occurrence(s) in ${summary.files} file(s).` +
             (summary.skipped > 0
@@ -100,14 +100,9 @@ export function activate(context: vscode.ExtensionContext) {
               : '')
         )
         invalidateProgramCache()
-        provider.postProgress({
-          kind: 'indeterminate',
-          message: 'Re-scanning workspace…',
-          fileCount: 0
-        })
         await scanForDeprecated((update) => {
           provider.postProgress(update)
-        })
+        }, { narrative: 'post-fix' })
       } finally {
         provider.setLoading(false)
       }
@@ -156,7 +151,7 @@ export function activate(context: vscode.ExtensionContext) {
 
   // Initial scan when the extension activates with an open workspace.
   if (vscode.workspace.workspaceFolders?.length) {
-    provider.setLoading(true)
+    provider.setLoading(true, 'Scanning workspace for deprecated APIs…')
     scanForDeprecated((update) => {
       provider.postProgress(update)
     })

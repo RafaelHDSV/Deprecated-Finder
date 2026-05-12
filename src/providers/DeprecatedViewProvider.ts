@@ -8,6 +8,8 @@ export class DeprecatedViewProvider implements vscode.WebviewViewProvider {
 
   private view?: vscode.WebviewView
   private loading = false
+  /** Shown in the loading strip until the first `postProgress` message arrives. */
+  private loadingProgressText: string | undefined
   private storeUnsubscribe?: () => void
 
   /** Save-triggered single-file scans: defer full HTML refresh so the activity strip stays visible. */
@@ -51,8 +53,9 @@ export class DeprecatedViewProvider implements vscode.WebviewViewProvider {
     this.view.webview.html = this.getHtml()
   }
 
-  public setLoading(loading: boolean) {
+  public setLoading(loading: boolean, initialProgressText?: string) {
     this.loading = loading
+    this.loadingProgressText = loading ? initialProgressText : undefined
     this.refresh()
   }
 
@@ -130,10 +133,10 @@ export class DeprecatedViewProvider implements vscode.WebviewViewProvider {
     const loadingState = this.loading
       ? `<div class="loading-state">
           <div class="progress-bar-wrap">
-            <div class="progress-bar-inner" id="progress-bar-inner" style="width:0%"></div>
+            <div class="progress-bar-inner indeterminate" id="progress-bar-inner" style="width:0%"></div>
           </div>
           <span class="spinner"></span>
-          <span id="progress-text">Initializing…</span>
+          <span id="progress-text">${escHtml(this.loadingProgressText ?? 'Working…')}</span>
         </div>`
       : ''
 
@@ -220,10 +223,14 @@ export class DeprecatedViewProvider implements vscode.WebviewViewProvider {
         bar.classList.remove('indeterminate');
         const pct = msg.total > 0 ? Math.round((msg.current / msg.total) * 100) : 0;
         bar.style.width = pct + '%';
-        text.textContent =
-          msg.total > 0
-            ? 'Analyzing ' + msg.current + ' / ' + msg.total + ' workspace files…'
-            : 'Initializing…';
+        if (typeof msg.statusText === 'string' && msg.statusText.length > 0) {
+          text.textContent = msg.statusText;
+        } else if (msg.total > 0) {
+          text.textContent =
+            'Analyzing ' + msg.current + ' / ' + msg.total + ' workspace files…';
+        } else {
+          text.textContent = 'Working…';
+        }
       });
 
       // ── Search ────────────────────────────────────────────────────────────
