@@ -36,7 +36,7 @@ src/
     scanner/
       workspaceScanner.ts               # findFiles glob (.ts/.tsx/.js/.jsx)
       deprecatedScanner.ts              # ts.Program; scanForDeprecated() e scanSingleFile()
-      tsDeprecatedScanner.ts            # AST visitor; lê texto real do @deprecated
+      tsDeprecatedScanner.ts            # AST visitor; @deprecated + resolução de props JSX pelo tipo da tag (ex.: antd Modal)
       suggestionParser.ts               # regex livres → suggestion: string | undefined
       importResolver.ts                 # identifica import de origem do símbolo
     fix/
