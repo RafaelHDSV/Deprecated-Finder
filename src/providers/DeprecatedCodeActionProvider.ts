@@ -24,7 +24,7 @@ export class DeprecatedCodeActionProvider implements vscode.CodeActionProvider {
       }
 
       const action = new vscode.CodeAction(
-        `Replace deprecated "${item.name}" with "${item.suggestion}"`,
+        quickFixTitle(item, document),
         vscode.CodeActionKind.QuickFix
       )
       action.command = {
@@ -37,6 +37,20 @@ export class DeprecatedCodeActionProvider implements vscode.CodeActionProvider {
 
     return actions
   }
+}
+
+function quickFixTitle(item: DeprecatedItem, document: vscode.TextDocument): string {
+  const suggestion = item.suggestion ?? ''
+  const isJsxFile = /\.(tsx|jsx)$/i.test(document.fileName)
+  const dotted =
+    isJsxFile &&
+    /^[A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)+$/.test(suggestion)
+
+  if (dotted) {
+    return `Replace deprecated "${item.name}" with JSX object form (${suggestion} → ${suggestion.split('.')[0]}={{ … }})`
+  }
+
+  return `Replace deprecated "${item.name}" with "${suggestion}"`
 }
 
 function intersectsItem(

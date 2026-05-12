@@ -127,6 +127,18 @@ function buildEditForItem(
     return false
   }
 
+  const jsxMigration = tryJsxDottedDeprecationMigration(document, item, item.suggestion)
+  if (jsxMigration) {
+    edit.replace(document.uri, jsxMigration.range, jsxMigration.newText)
+    if (handleImport && item.importInfo) {
+      const importEdit = buildImportEdit(document, item)
+      if (importEdit) {
+        edit.replace(document.uri, importEdit.range, importEdit.newText)
+      }
+    }
+    return true
+  }
+
   const range = identifierRange(document, item)
   if (!range) {
     return false
@@ -142,6 +154,129 @@ function buildEditForItem(
   }
 
   return true
+}
+
+/**
+ * Ant Design-style deprecations suggest `mask.closable` instead of `maskClosable`.
+ * In JSX, `mask.closable={x}` is invalid; use `mask={{ closable: x }}`.
+ * Same idea: `showSearch.filterOption` → `showSearch={{ filterOption: … }}`.
+ *
+ * If the root prop (e.g. `mask`) already exists on the same element, we skip —
+ * merging object literals is not implemented.
+ */
+function tryJsxDottedDeprecationMigration(
+  document: vscode.TextDocument,
+  item: DeprecatedItem,
+  suggestion: string
+): { range: vscode.Range; newText: string } | undefined {
+  if (!isJsxLikeFile(document.fileName)) {
+    return undefined
+  }
+
+  const segments = suggestion.split('.').filter((s) => /^[A-Za-z_$][\w$]*$/.test(s))
+  if (segments.length < 2) {
+    return undefined
+  }
+
+  const sourceFile = ts.createSourceFile(
+    document.fileName,
+    document.getText(),
+    ts.ScriptTarget.Latest,
+    true,
+    detectScriptKind(document.fileName)
+  )
+
+  const pos = document.offsetAt(new vscode.Position(item.line - 1, item.column - 1))
+  const attr = findJsxAttributeContainingPosition(sourceFile, pos)
+  if (!attr || !ts.isIdentifier(attr.name) || attr.name.text !== item.name) {
+    return undefined
+  }
+
+  const rootProp = segments[0]
+  const nested = segments.slice(1)
+  const parentAttrs = attr.parent
+  if (!ts.isJsxAttributes(parentAttrs)) {
+    return undefined
+  }
+
+  if (hasSiblingJsxAttributeNamed(parentAttrs, rootProp, attr)) {
+    return undefined
+  }
+
+  const valueSource = jsxAttributeValueExpressionText(sourceFile, attr)
+  const objectInner = buildNestedObjectLiteralSource(nested, valueSource)
+  const newText = `${rootProp}={{ ${objectInner} }}`
+
+  const start = document.positionAt(attr.getStart(sourceFile))
+  const end = document.positionAt(attr.getEnd())
+  return { range: new vscode.Range(start, end), newText }
+}
+
+function isJsxLikeFile(fileName: string): boolean {
+  return /\.(tsx|jsx)$/i.test(fileName)
+}
+
+function findJsxAttributeContainingPosition(
+  sourceFile: ts.SourceFile,
+  pos: number
+): ts.JsxAttribute | undefined {
+  let hit: ts.JsxAttribute | undefined
+  const visit = (node: ts.Node) => {
+    if (hit) {
+      return
+    }
+    if (ts.isJsxAttribute(node)) {
+      const name = node.name
+      if (ts.isIdentifier(name) && pos >= name.getStart(sourceFile) && pos < node.end) {
+        hit = node
+        return
+      }
+    }
+    ts.forEachChild(node, visit)
+  }
+  visit(sourceFile)
+  return hit
+}
+
+function hasSiblingJsxAttributeNamed(
+  attrs: ts.JsxAttributes,
+  name: string,
+  except: ts.JsxAttribute
+): boolean {
+  for (const p of attrs.properties) {
+    if (!ts.isJsxAttribute(p) || p === except) {
+      continue
+    }
+    if (ts.isIdentifier(p.name) && p.name.text === name) {
+      return true
+    }
+  }
+  return false
+}
+
+function jsxAttributeValueExpressionText(
+  sourceFile: ts.SourceFile,
+  attr: ts.JsxAttribute
+): string {
+  if (!attr.initializer) {
+    return 'true'
+  }
+  if (ts.isJsxExpression(attr.initializer)) {
+    const expr = attr.initializer.expression
+    if (expr === undefined) {
+      return 'undefined'
+    }
+    return expr.getText(sourceFile)
+  }
+  return attr.initializer.getText(sourceFile)
+}
+
+/** `['closable'], '!loading'` → `closable: !loading`; deeper paths nest `{ }`. */
+function buildNestedObjectLiteralSource(path: string[], valueExpr: string): string {
+  if (path.length === 1) {
+    return `${path[0]}: ${valueExpr}`
+  }
+  return `${path[0]}: { ${buildNestedObjectLiteralSource(path.slice(1), valueExpr)} }`
 }
 
 function identifierRange(
