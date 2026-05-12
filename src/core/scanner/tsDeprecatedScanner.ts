@@ -67,32 +67,19 @@ function collectUsageDeprecated(
       deprecatedTag = undefined
 
       if (symbol) {
-        deprecatedTag = findDeprecatedTag(symbol.getDeclarations() ?? [])
-        if (!deprecatedTag) {
-          const aliasedSymbol = tryFollowAlias(symbol, checker)
-          if (aliasedSymbol && aliasedSymbol !== symbol) {
-            deprecatedTag = findDeprecatedTag(aliasedSymbol.getDeclarations() ?? [])
-            if (deprecatedTag) {
-              symbol = aliasedSymbol
-            }
-          }
+        const resolved = unwrapAliasChain(symbol, checker)
+        deprecatedTag = findDeprecatedTag(resolved.getDeclarations() ?? [])
+        if (deprecatedTag) {
+          symbol = resolved
         }
       }
 
       if (!deprecatedTag) {
         const jsxProp = tryJsxAttributePropertySymbol(node, checker)
         if (jsxProp) {
-          symbol = jsxProp
-          deprecatedTag = findDeprecatedTag(jsxProp.getDeclarations() ?? [])
-          if (!deprecatedTag) {
-            const aliasProp = tryFollowAlias(jsxProp, checker)
-            if (aliasProp && aliasProp !== jsxProp) {
-              deprecatedTag = findDeprecatedTag(aliasProp.getDeclarations() ?? [])
-              if (deprecatedTag) {
-                symbol = aliasProp
-              }
-            }
-          }
+          const resolvedProp = unwrapAliasChain(jsxProp, checker)
+          symbol = resolvedProp
+          deprecatedTag = findDeprecatedTag(resolvedProp.getDeclarations() ?? [])
         }
       }
 
@@ -351,6 +338,36 @@ function findDeprecatedTag(nodes: readonly ts.Node[]): ts.JSDocTag | undefined {
 }
 
 /**
+ * Props type for JSX components: `FunctionComponent<P>` only exposes `P` via
+ * the first parameter of the call signature — `getProperty` on the
+ * intersection `FC<P> & { static methods }` does not see members of `P`
+ * (e.g. antd `Modal`).
+ */
+function tryGetJsxCallPropsParameterType(
+  checker: ts.TypeChecker,
+  componentType: ts.Type,
+  contextNode: ts.Node
+): ts.Type | undefined {
+  const apparent = checker.getApparentType(componentType)
+
+  for (const sig of apparent.getCallSignatures()) {
+    const first = sig.parameters[0]
+    if (first) {
+      return checker.getTypeOfSymbolAtLocation(first, contextNode)
+    }
+  }
+
+  for (const sig of apparent.getConstructSignatures()) {
+    const first = sig.parameters[0]
+    if (first) {
+      return checker.getTypeOfSymbolAtLocation(first, contextNode)
+    }
+  }
+
+  return undefined
+}
+
+/**
  * For `<Comp propName />`, `getSymbolAtLocation(propName)` often misses the
  * library PropertySignature that carries `@deprecated`. Resolve `propName`
  * on the apparent type of the JSX tag instead.
@@ -377,7 +394,14 @@ function tryJsxAttributePropertySymbol(
   }
 
   try {
-    const tagType = checker.getTypeAtLocation(tagName)
+    const tagType = checker.getApparentType(checker.getTypeAtLocation(tagName))
+    const propsType = tryGetJsxCallPropsParameterType(checker, tagType, tagName)
+    if (propsType) {
+      const fromProps = findPropertySymbolOnType(checker, propsType, node.text)
+      if (fromProps) {
+        return fromProps
+      }
+    }
     return findPropertySymbolOnType(checker, tagType, node.text)
   } catch {
     return undefined
@@ -431,18 +455,28 @@ function findPropertySymbolOnType(
   return undefined
 }
 
-function tryFollowAlias(
-  symbol: ts.Symbol,
-  checker: ts.TypeChecker
-): ts.Symbol | undefined {
-  try {
-    if (symbol.flags & ts.SymbolFlags.Alias) {
-      return checker.getAliasedSymbol(symbol)
+/**
+ * Local import symbols (e.g. `ChartBar`) often only list `ImportSpecifier` as
+ * their declaration, without `@deprecated`; the tag lives on the aliased
+ * export in node_modules. Walk the alias chain (re-exports, etc.).
+ */
+function unwrapAliasChain(symbol: ts.Symbol, checker: ts.TypeChecker): ts.Symbol {
+  let current: ts.Symbol = symbol
+  for (let depth = 0; depth < 16; depth++) {
+    if (!(current.flags & ts.SymbolFlags.Alias)) {
+      return current
     }
-  } catch {
-    // ignore
+    try {
+      const next = checker.getAliasedSymbol(current)
+      if (!next || next === current) {
+        return current
+      }
+      current = next
+    } catch {
+      return current
+    }
   }
-  return undefined
+  return current
 }
 
 function readTagText(tag: ts.JSDocTag): string | undefined {
