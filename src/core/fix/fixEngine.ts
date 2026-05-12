@@ -128,8 +128,10 @@ function buildEditForItem(
   }
 
   const jsxMigration = tryJsxDottedDeprecationMigration(document, item, item.suggestion)
-  if (jsxMigration) {
-    edit.replace(document.uri, jsxMigration.range, jsxMigration.newText)
+  if (jsxMigration && jsxMigration.length > 0) {
+    for (const patch of sortJsxPatchesDescending(jsxMigration)) {
+      edit.replace(document.uri, patch.range, patch.newText)
+    }
     if (handleImport && item.importInfo) {
       const importEdit = buildImportEdit(document, item)
       if (importEdit) {
@@ -156,19 +158,44 @@ function buildEditForItem(
   return true
 }
 
+interface JsxPatch {
+  range: vscode.Range
+  newText: string
+}
+
+function sortJsxPatchesDescending(patches: JsxPatch[]): JsxPatch[] {
+  return [...patches].sort((a, b) => {
+    if (a.range.start.line !== b.range.start.line) {
+      return b.range.start.line - a.range.start.line
+    }
+    return b.range.start.character - a.range.start.character
+  })
+}
+
+function rangeForTsNode(
+  document: vscode.TextDocument,
+  sourceFile: ts.SourceFile,
+  node: ts.Node
+): vscode.Range {
+  const start = document.positionAt(node.getStart(sourceFile))
+  const end = document.positionAt(node.getEnd())
+  return new vscode.Range(start, end)
+}
+
 /**
  * Ant Design-style deprecations suggest `mask.closable` instead of `maskClosable`.
  * In JSX, `mask.closable={x}` is invalid; use `mask={{ closable: x }}`.
  * Same idea: `showSearch.filterOption` → `showSearch={{ filterOption: … }}`.
  *
- * If the root prop (e.g. `mask`) already exists on the same element, we skip —
- * merging object literals is not implemented.
+ * When the root prop already exists (e.g. `showSearch` shorthand next to
+ * `filterOption`), we remove the leaf attribute and merge into the root
+ * (`showSearch={{ filterOption: … }}` or merge into an existing object literal).
  */
 function tryJsxDottedDeprecationMigration(
   document: vscode.TextDocument,
   item: DeprecatedItem,
   suggestion: string
-): { range: vscode.Range; newText: string } | undefined {
+): JsxPatch[] | undefined {
   if (!isJsxLikeFile(document.fileName)) {
     return undefined
   }
@@ -199,17 +226,155 @@ function tryJsxDottedDeprecationMigration(
     return undefined
   }
 
-  if (hasSiblingJsxAttributeNamed(parentAttrs, rootProp, attr)) {
+  const valueSource = jsxAttributeValueExpressionText(sourceFile, attr)
+  const objectInner = buildNestedObjectLiteralSource(nested, valueSource)
+  const leafRange = rangeForTsNode(document, sourceFile, attr)
+  const rootSibling = findSiblingJsxAttribute(parentAttrs, rootProp, attr)
+
+  if (!rootSibling) {
+    const newText = `${rootProp}={{ ${objectInner} }}`
+    return [{ range: leafRange, newText }]
+  }
+
+  const merged = tryMergeJsxDottedIntoExistingRoot(
+    document,
+    sourceFile,
+    rootProp,
+    rootSibling,
+    nested,
+    objectInner,
+    valueSource,
+    leafRange
+  )
+  return merged
+}
+
+function tryMergeJsxDottedIntoExistingRoot(
+  document: vscode.TextDocument,
+  sourceFile: ts.SourceFile,
+  rootProp: string,
+  rootSibling: ts.JsxAttribute,
+  nested: string[],
+  objectInner: string,
+  valueSource: string,
+  leafRange: vscode.Range
+): JsxPatch[] | undefined {
+  const rootRange = rangeForTsNode(document, sourceFile, rootSibling)
+
+  if (!rootSibling.initializer) {
+    return sortJsxPatchesDescending([
+      { range: leafRange, newText: '' },
+      { range: rootRange, newText: `${rootProp}={{ ${objectInner} }}` }
+    ])
+  }
+
+  if (ts.isStringLiteral(rootSibling.initializer)) {
     return undefined
   }
 
-  const valueSource = jsxAttributeValueExpressionText(sourceFile, attr)
-  const objectInner = buildNestedObjectLiteralSource(nested, valueSource)
-  const newText = `${rootProp}={{ ${objectInner} }}`
+  if (ts.isJsxExpression(rootSibling.initializer)) {
+    const expr = rootSibling.initializer.expression
+    if (expr === undefined) {
+      return sortJsxPatchesDescending([
+        { range: leafRange, newText: '' },
+        { range: rootRange, newText: `${rootProp}={{ ${objectInner} }}` }
+      ])
+    }
+    if (expr.kind === ts.SyntaxKind.TrueKeyword) {
+      return sortJsxPatchesDescending([
+        { range: leafRange, newText: '' },
+        { range: rootRange, newText: `${rootProp}={{ ${objectInner} }}` }
+      ])
+    }
+    if (ts.isObjectLiteralExpression(expr)) {
+      const mergedObj = mergeLeafIntoObjectLiteral(sourceFile, expr, nested, valueSource)
+      if (!mergedObj) {
+        return undefined
+      }
+      const printer = ts.createPrinter({ newLine: ts.NewLineKind.LineFeed })
+      const printed = printer.printNode(ts.EmitHint.Expression, mergedObj, sourceFile)
+      return sortJsxPatchesDescending([
+        { range: leafRange, newText: '' },
+        { range: rootRange, newText: `${rootProp}={${printed}}` }
+      ])
+    }
+    return undefined
+  }
 
-  const start = document.positionAt(attr.getStart(sourceFile))
-  const end = document.positionAt(attr.getEnd())
-  return { range: new vscode.Range(start, end), newText }
+  return undefined
+}
+
+function mergeLeafIntoObjectLiteral(
+  sourceFile: ts.SourceFile,
+  obj: ts.ObjectLiteralExpression,
+  nested: string[],
+  valueExprString: string
+): ts.ObjectLiteralExpression | undefined {
+  if (nested.length !== 1) {
+    return undefined
+  }
+  const key = nested[0]
+  const parsed = parseExpressionFragment(valueExprString, sourceFile)
+  if (!parsed) {
+    return undefined
+  }
+
+  const kept = obj.properties.filter((p) => {
+    if (!ts.isPropertyAssignment(p)) {
+      return true
+    }
+    const name = p.name
+    if (ts.isIdentifier(name) && name.text === key) {
+      return false
+    }
+    if (ts.isStringLiteral(name) && name.text === key) {
+      return false
+    }
+    return true
+  })
+
+  const newProp = ts.factory.createPropertyAssignment(ts.factory.createIdentifier(key), parsed)
+  return ts.factory.updateObjectLiteralExpression(obj, [...kept, newProp])
+}
+
+function parseExpressionFragment(text: string, _sourceFile: ts.SourceFile): ts.Expression | undefined {
+  const wrapped = `const __df_frag = (${text});\n`
+  const frag = ts.createSourceFile(
+    '__df_frag.tsx',
+    wrapped,
+    ts.ScriptTarget.Latest,
+    true,
+    ts.ScriptKind.TSX
+  )
+  const stmt = frag.statements[0]
+  if (!ts.isVariableStatement(stmt)) {
+    return undefined
+  }
+  const decl = stmt.declarationList.declarations[0]
+  const init = decl.initializer
+  if (!init) {
+    return undefined
+  }
+  if (ts.isParenthesizedExpression(init)) {
+    return init.expression
+  }
+  return init
+}
+
+function findSiblingJsxAttribute(
+  attrs: ts.JsxAttributes,
+  name: string,
+  except: ts.JsxAttribute
+): ts.JsxAttribute | undefined {
+  for (const p of attrs.properties) {
+    if (!ts.isJsxAttribute(p) || p === except) {
+      continue
+    }
+    if (ts.isIdentifier(p.name) && p.name.text === name) {
+      return p
+    }
+  }
+  return undefined
 }
 
 function isJsxLikeFile(fileName: string): boolean {
@@ -236,22 +401,6 @@ function findJsxAttributeContainingPosition(
   }
   visit(sourceFile)
   return hit
-}
-
-function hasSiblingJsxAttributeNamed(
-  attrs: ts.JsxAttributes,
-  name: string,
-  except: ts.JsxAttribute
-): boolean {
-  for (const p of attrs.properties) {
-    if (!ts.isJsxAttribute(p) || p === except) {
-      continue
-    }
-    if (ts.isIdentifier(p.name) && p.name.text === name) {
-      return true
-    }
-  }
-  return false
 }
 
 function jsxAttributeValueExpressionText(
