@@ -7,7 +7,7 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/rafael/deprecated-finder"
+    "url": "https://github.com/RafaelHDSV/Deprecated-Finder"
   },
   "engines": {
     "vscode": "^1.100.0"
