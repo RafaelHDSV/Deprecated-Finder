@@ -1,0 +1,6 @@
+{
+  "name": "deprecated-finder-demo-workspace",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Minimal TS workspace to demo Deprecated Finder (fast scan)"
+}
