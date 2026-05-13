@@ -3,9 +3,10 @@ import { DeprecatedItem } from '../core/model/DeprecatedItem'
 export function getDeprecatedPanelHtml(items: DeprecatedItem[]): string {
   const fixableCount = items.filter((item) => item.suggestion).length
 
-  const rows = items.length === 0
-    ? `<tr><td colspan="5" class="empty">No deprecated symbols found yet.</td></tr>`
-    : items.map((item) => renderRow(item)).join('')
+  const rows =
+    items.length === 0
+      ? `<tr><td colspan="5" class="empty">No deprecated symbols found yet.</td></tr>`
+      : items.map((item) => renderRow(item)).join('')
 
   return `<!DOCTYPE html>
 <html lang="en">
@@ -18,11 +19,26 @@ export function getDeprecatedPanelHtml(items: DeprecatedItem[]): string {
       <h2>Deprecated Finder</h2>
       <div class="actions">
         <button class="btn ghost" data-action="rescan">Re-scan workspace</button>
-        <button class="btn primary" data-action="fixAll" ${
+        <button class="btn primary" id="fix-all-btn" data-action="fixAll" ${
           fixableCount === 0 ? 'disabled' : ''
         }>Fix all (${fixableCount})</button>
       </div>
     </header>
+
+    <div class="search-wrap">
+      <input
+        type="text"
+        id="search"
+        class="search-input"
+        placeholder="Search by symbol, suggestion, or file…"
+        autocomplete="off"
+        spellcheck="false"
+      />
+    </div>
+
+    <div class="no-results" id="no-results" style="display:none">
+      No results match your search.
+    </div>
 
     <table>
       <thead>
@@ -34,13 +50,51 @@ export function getDeprecatedPanelHtml(items: DeprecatedItem[]): string {
           <th>Action</th>
         </tr>
       </thead>
-      <tbody>
+      <tbody id="dep-tbody">
         ${rows}
       </tbody>
     </table>
 
     <script>
       const vscode = acquireVsCodeApi();
+
+      const searchInput = document.getElementById('search');
+      const noResults = document.getElementById('no-results');
+      const fixAllBtn = document.getElementById('fix-all-btn');
+
+      function visibleFixableIds() {
+        const ids = [];
+        document.querySelectorAll('tr.dep-row').forEach((tr) => {
+          if (tr.style.display === 'none') return;
+          const id = tr.getAttribute('data-item-id');
+          if (id) ids.push(id);
+        });
+        return ids;
+      }
+
+      function updateFixAllButton() {
+        if (!fixAllBtn) return;
+        const ids = visibleFixableIds();
+        fixAllBtn.textContent = 'Fix all (' + ids.length + ')';
+        fixAllBtn.disabled = ids.length === 0;
+      }
+
+      searchInput && searchInput.addEventListener('input', () => {
+        const q = (searchInput.value || '').toLowerCase().trim();
+        let anyVisible = false;
+        document.querySelectorAll('tr.dep-row').forEach((tr) => {
+          const hay = (tr.getAttribute('data-search') || '').toLowerCase();
+          const visible = !q || hay.includes(q);
+          tr.style.display = visible ? '' : 'none';
+          if (visible) anyVisible = true;
+        });
+        if (noResults) {
+          noResults.style.display = q && !anyVisible ? 'block' : 'none';
+        }
+        updateFixAllButton();
+      });
+
+      updateFixAllButton();
 
       document.querySelectorAll('[data-action]').forEach(el => {
         el.addEventListener('click', (evt) => {
@@ -52,7 +106,9 @@ export function getDeprecatedPanelHtml(items: DeprecatedItem[]): string {
             return;
           }
           if (action === 'fixAll') {
-            vscode.postMessage({ type: 'fixAll' });
+            const ids = visibleFixableIds();
+            if (ids.length === 0) return;
+            vscode.postMessage({ type: 'fixAll', itemIds: ids });
             return;
           }
           if (action === 'fixItem') {
@@ -88,8 +144,21 @@ function renderRow(item: DeprecatedItem): string {
       )}">Fix</button>`
     : `<button class="btn small" disabled>Fix</button>`
 
+  const searchBlob = [
+    item.name,
+    item.suggestion ?? '',
+    item.filePath,
+    shortenPath(item.filePath)
+  ]
+    .join(' ')
+    .replace(/"/g, '')
+
+  const itemIdAttr = item.suggestion ? escapeAttr(item.id) : ''
+
   return `
-    <tr>
+    <tr class="dep-row" data-search="${escapeAttr(searchBlob)}"${
+    itemIdAttr ? ` data-item-id="${itemIdAttr}"` : ''
+  }>
       <td><code>${escapeHtml(item.name)}</code></td>
       <td>${suggestion}</td>
       <td class="file" title="${escapeAttr(item.filePath)}">${escapeHtml(
@@ -141,10 +210,32 @@ function getStyles(): string {
       display: flex;
       justify-content: space-between;
       align-items: center;
-      margin-bottom: 16px;
+      margin-bottom: 12px;
     }
     .toolbar h2 { margin: 0; }
     .actions { display: flex; gap: 8px; }
+    .search-wrap {
+      margin-bottom: 12px;
+    }
+    .search-input {
+      width: 100%;
+      max-width: 480px;
+      background: var(--vscode-input-background);
+      color: var(--vscode-input-foreground);
+      border: 1px solid var(--vscode-input-border, transparent);
+      border-radius: 2px;
+      padding: 6px 10px;
+      font-size: 13px;
+      outline: none;
+    }
+    .search-input:focus {
+      border-color: var(--vscode-focusBorder);
+    }
+    .no-results {
+      color: var(--vscode-descriptionForeground);
+      margin-bottom: 12px;
+      font-size: 13px;
+    }
     .btn {
       border: 1px solid var(--vscode-button-border, transparent);
       background: var(--vscode-button-secondaryBackground, transparent);

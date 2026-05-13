@@ -1,7 +1,7 @@
 import * as vscode from 'vscode'
 import { deprecatedStore } from '../core/state/deprecatedStore'
 import { DeprecatedItem } from '../core/model/DeprecatedItem'
-import type { ScanProgressMessage } from '../core/scanner/deprecatedScanner'
+import type { ScanProgressMessage } from '../core/scanner/scanProgressTypes'
 import { handleWebviewInboundMessage } from '../webview/webviewMessageValidation'
 
 export class DeprecatedViewProvider implements vscode.WebviewViewProvider {
@@ -131,7 +131,7 @@ export class DeprecatedViewProvider implements vscode.WebviewViewProvider {
       </div>
       <div class="actions">
         <button class="btn ghost" data-action="rescan" ${this.loading ? 'disabled' : ''}>Re-scan</button>
-        <button class="btn primary" data-action="fixAll" ${
+        <button class="btn primary" id="fix-all-btn" data-action="fixAll" ${
           this.loading || fixableCount === 0 ? 'disabled' : ''
         }>Fix all (${fixableCount})</button>
       </div>
@@ -210,11 +210,30 @@ export class DeprecatedViewProvider implements vscode.WebviewViewProvider {
         }
       });
 
-      // ── Search ────────────────────────────────────────────────────────────
+      // ── Search + Fix all scope ────────────────────────────────────────────
       const searchInput = document.getElementById('search');
-      const filesContainer = document.getElementById('files-container');
       const noResults = document.getElementById('no-results');
       const badgeEl = document.getElementById('badge');
+      const fixAllBtn = document.getElementById('fix-all-btn');
+      const scanBusy = ${this.loading ? 'true' : 'false'};
+
+      function visibleFixableIds() {
+        const ids = [];
+        document.querySelectorAll('li.item').forEach((li) => {
+          if (li.style.display === 'none') return;
+          const btn = li.querySelector('[data-action="fixItem"][data-item-id]');
+          const id = btn && btn.getAttribute('data-item-id');
+          if (id) ids.push(id);
+        });
+        return ids;
+      }
+
+      function updateFixAllButton() {
+        if (!fixAllBtn) return;
+        const ids = visibleFixableIds();
+        fixAllBtn.textContent = 'Fix all (' + ids.length + ')';
+        fixAllBtn.disabled = scanBusy || ids.length === 0;
+      }
 
       searchInput && searchInput.addEventListener('input', () => {
         const query = searchInput.value.toLowerCase().trim();
@@ -223,7 +242,8 @@ export class DeprecatedViewProvider implements vscode.WebviewViewProvider {
         document.querySelectorAll('.item').forEach(item => {
           const name = (item.querySelector('.name')?.textContent ?? '').toLowerCase();
           const file = (item.getAttribute('data-file') ?? '').toLowerCase();
-          const visible = !query || name.includes(query) || file.includes(query);
+          const suggest = (item.querySelector('.suggestion')?.textContent ?? '').toLowerCase();
+          const visible = !query || name.includes(query) || file.includes(query) || suggest.includes(query);
           item.style.display = visible ? '' : 'none';
           if (visible) visibleCount++;
         });
@@ -241,7 +261,10 @@ export class DeprecatedViewProvider implements vscode.WebviewViewProvider {
         }
 
         if (badgeEl) badgeEl.textContent = visibleCount > 0 ? String(visibleCount) : '${items.length}';
+        updateFixAllButton();
       });
+
+      updateFixAllButton();
 
       // ── Actions ───────────────────────────────────────────────────────────
       document.addEventListener('click', (evt) => {
@@ -254,7 +277,9 @@ export class DeprecatedViewProvider implements vscode.WebviewViewProvider {
         if (action === 'rescan') {
           vscode.postMessage({ type: 'rescan' });
         } else if (action === 'fixAll') {
-          vscode.postMessage({ type: 'fixAll' });
+          const ids = visibleFixableIds();
+          if (ids.length === 0) return;
+          vscode.postMessage({ type: 'fixAll', itemIds: ids });
         } else if (action === 'fixItem') {
           vscode.postMessage({ type: 'fixItem', itemId: el.getAttribute('data-item-id') });
         } else if (action === 'openFile') {
@@ -322,6 +347,7 @@ function renderItem(item: DeprecatedItem, actionsLocked: boolean): string {
 
   return `
 <li class="item"
+    data-item-id="${escAttr(item.id)}"
     data-file="${escAttr(item.filePath)}"
     data-line="${item.line}">
   <div class="item-main" data-action="openFile"

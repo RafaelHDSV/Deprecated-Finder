@@ -88,35 +88,51 @@ export function activate(context: vscode.ExtensionContext) {
   )
 
   context.subscriptions.push(
-    vscode.commands.registerCommand('deprecatedFinder.fixAll', async () => {
-      const items = deprecatedStore.getAll()
-      provider.setLoading(true, 'Applying fixes to the workspace…')
-      try {
-        const summary = await fixAll(items, (p) => {
-          const message =
-            p.phase === 'editing'
-              ? `Applying fixes: preparing edits (${p.current} / ${p.total} files)…`
-              : `Applying fixes: saving (${p.current} / ${p.total} files)…`
-          provider.postProgress({
-            kind: 'indeterminate',
-            message,
-            fileCount: 0
+    vscode.commands.registerCommand(
+      'deprecatedFinder.fixAll',
+      async (...args: unknown[]) => {
+        const rawIds = args[0]
+        let items = deprecatedStore.getAll()
+        if (Array.isArray(rawIds) && rawIds.length > 0) {
+          const idSet = new Set(
+            rawIds.filter((x): x is string => typeof x === 'string' && x.length > 0)
+          )
+          items = items.filter((it) => idSet.has(it.id) && it.suggestion)
+          if (items.length === 0) {
+            vscode.window.showWarningMessage(
+              'Deprecated Finder: no fixable items match the current filter.'
+            )
+            return
+          }
+        }
+        provider.setLoading(true, 'Applying fixes to the workspace…')
+        try {
+          const summary = await fixAll(items, (p) => {
+            const message =
+              p.phase === 'editing'
+                ? `Applying fixes: preparing edits (${p.current} / ${p.total} files)…`
+                : `Applying fixes: saving (${p.current} / ${p.total} files)…`
+            provider.postProgress({
+              kind: 'indeterminate',
+              message,
+              fileCount: 0
+            })
           })
-        })
-        vscode.window.showInformationMessage(
-          `Deprecated Finder: fixed ${summary.fixed} occurrence(s) in ${summary.files} file(s).` +
-            (summary.skipped > 0
-              ? ` Skipped ${summary.skipped} item(s) without suggestion.`
-              : '')
-        )
-        invalidateProgramCache()
-        await scanForDeprecated((update) => {
-          provider.postProgress(update)
-        }, { narrative: 'post-fix' })
-      } finally {
-        provider.setLoading(false)
+          vscode.window.showInformationMessage(
+            `Deprecated Finder: fixed ${summary.fixed} occurrence(s) in ${summary.files} file(s).` +
+              (summary.skipped > 0
+                ? ` Skipped ${summary.skipped} item(s) without suggestion.`
+                : '')
+          )
+          invalidateProgramCache()
+          await scanForDeprecated((update) => {
+            provider.postProgress(update)
+          }, { narrative: 'post-fix' })
+        } finally {
+          provider.setLoading(false)
+        }
       }
-    })
+    )
   )
 
   context.subscriptions.push(

@@ -12,6 +12,23 @@ import {
 } from '../../logging/deprecatedFinderLog'
 import { scanFileForDeprecated } from './tsDeprecatedScanner'
 import { scanWorkspaceFiles } from './workspaceScanner'
+import {
+  collectProgramGroupInWorker,
+  logWorkerFallback
+} from './scanGroupWorkerHost'
+import type {
+  ProgressCallback,
+  ScanForDeprecatedOptions,
+  ScanNarrative,
+  ScanProgressMessage
+} from './scanProgressTypes'
+
+export type {
+  ProgressCallback,
+  ScanForDeprecatedOptions,
+  ScanNarrative,
+  ScanProgressMessage
+} from './scanProgressTypes'
 
 /**
  * Monotonic serial: only the latest `scanForDeprecated` request may call
@@ -66,31 +83,6 @@ async function leaveFullWorkspaceScan() {
   if (fullWorkspaceScanDepth === 0) {
     await flushPendingSingleFileRescans()
   }
-}
-
-/** Progress updates for the sidebar UI (determinate file scan vs. long TS program build). */
-export type ScanProgressMessage =
-  | {
-      kind: 'indeterminate'
-      message: string
-      /** Total root files once known; 0 while still searching */
-      fileCount: number
-    }
-  | {
-      kind: 'determinate'
-      current: number
-      total: number
-      /** Full status line; when set, the webview uses this instead of the default "Analyzing …" text. */
-      statusText?: string
-    }
-
-export type ProgressCallback = (update: ScanProgressMessage) => void
-
-/** Wording for the full-workspace scan phase (e.g. after Fix all). */
-export type ScanNarrative = 'default' | 'post-fix'
-
-export interface ScanForDeprecatedOptions {
-  narrative?: ScanNarrative
 }
 
 const FALLBACK_OPTIONS: ts.CompilerOptions = {
@@ -288,6 +280,16 @@ function buildScanCompilerOptions(
   }
 }
 
+async function yieldToEventLoop(): Promise<void> {
+  await new Promise<void>((resolve) => setImmediate(resolve))
+}
+
+function cloneCompilerOptionsForWorker(
+  options: ts.CompilerOptions
+): ts.CompilerOptions {
+  return JSON.parse(JSON.stringify(options)) as ts.CompilerOptions
+}
+
 /**
  * Walks explicit workspace paths (not `program.getSourceFiles()`), so the
  * first progress tick happens as soon as real analysis starts — otherwise
@@ -425,16 +427,18 @@ async function runFullWorkspaceScan(
 
   for (const [groupKey, paths] of groups) {
     groupIndex++
+    const baseBuildingMessage = postFix
+      ? groupCount > 1
+        ? `Re-scanning workspace: building programs (${groupIndex}/${groupCount})…`
+        : 'Re-scanning workspace: building program…'
+      : groupCount > 1
+        ? `Building program (${groupIndex}/${groupCount})…`
+        : 'Building program…'
+
     reportProgress({
       kind: 'indeterminate',
-      message: postFix
-        ? groupCount > 1
-          ? `Re-scanning workspace: building programs (${groupIndex}/${groupCount})…`
-          : 'Re-scanning workspace: building program…'
-        : groupCount > 1
-          ? `Building program (${groupIndex}/${groupCount})…`
-          : 'Building program…',
-      fileCount: 0
+      message: `${baseBuildingMessage} (${paths.length} root file(s) in this group; compilation may take several minutes. Elapsed seconds update every second until file-by-file analysis starts.)`,
+      fileCount: paths.length
     })
 
     const expanded =
@@ -452,14 +456,42 @@ async function runFullWorkspaceScan(
       )
     }
 
-    const program = ts.createProgram(paths, compilerOptions)
-    const chunk = collectFromProgramWithProgress(
-      program,
-      paths,
-      reportProgress,
-      progress,
-      narrative
-    )
+    await yieldToEventLoop()
+
+    let chunk: DeprecatedItem[]
+    try {
+      const heartbeat = (elapsedSec: number): ScanProgressMessage => ({
+        kind: 'indeterminate',
+        message: `${baseBuildingMessage} ${elapsedSec}s elapsed — compiling ${paths.length} root file(s) in a background worker (no per-file counter until TypeScript finishes program creation).`,
+        fileCount: paths.length
+      })
+      const { items: workerItems, progressCurrent } =
+        await collectProgramGroupInWorker(
+          {
+            paths,
+            compilerOptions: cloneCompilerOptionsForWorker(compilerOptions),
+            narrative,
+            progress: { current: progress.current, total: progress.total }
+          },
+          reportProgress,
+          heartbeat
+        )
+      progress.current = progressCurrent
+      chunk = workerItems
+    } catch (err) {
+      logWorkerFallback(
+        err instanceof Error ? err.message : String(err)
+      )
+      await yieldToEventLoop()
+      const program = ts.createProgram(paths, compilerOptions)
+      chunk = collectFromProgramWithProgress(
+        program,
+        paths,
+        reportProgress,
+        progress,
+        narrative
+      )
+    }
     for (const item of chunk) {
       map.set(item.id, item)
     }

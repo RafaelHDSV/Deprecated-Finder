@@ -22,7 +22,8 @@ Issue de origem: `.issues/github/ISSUE-001-deprecated-finder.md`.
 - **npm** como gerenciador oficial (`package-lock.json`; CI com `npm ci`)
 - Configurações `deprecatedFinder.showScanSummary` e `deprecatedFinder.verboseLogging` (`package.json` → Settings); diagnóstico verboso e avisos do scan no painel **Output → Deprecated Finder**
 - Durante `scanForDeprecated`, saves disparam `scanSingleFile` em modo **fila + flush** (sem `updateFile` intermédio) — ver `context.md` fluxo e README **Scan behavior**
-- Pedidos de scan global: **fila** (`fullWorkspaceScanTurn`) — um `scanForDeprecated` de cada vez; evita UI presa em “Building program (1/2)” quando um segundo scan invalidava o epoch a meio do primeiro. **Epoch** (`scanRequestSerial`) ainda limita `set`/toast/progress para o pedido mais recente se no futuro houver sobreposição (ver README)
+- Pedidos de scan global: **fila** (`fullWorkspaceScanTurn`); **epoch** (`scanRequestSerial`) para `set`/toast/progress; **worker** `scanGroupWorker` por grupo tsconfig com **heartbeat** (segundos decorridos) no host enquanto `createProgram` corre fora do thread da extensão; *fallback* síncrono se o worker falhar (log em Output)
+- **Fix all** na sidebar / painel tabular: respeita a **pesquisa** (só itens visíveis com `suggestion`); mensagem `fixAll` com `itemIds` (máx. `MAX_FIX_ALL_ITEM_IDS` em `webviewMessageValidation.ts`); comando de **paleta** sem args aplica a **lista completa** do store
 - Mensagens `postMessage` da webview (sidebar + painel) validadas em `src/webview/webviewMessageValidation.ts`; payloads inválidos ignorados (log `[webview]` só com `verboseLogging`)
 - TypeScript (`commonjs`, target ES2020)
 - VS Code Extension API (`@types/vscode ^1.100`)
@@ -45,6 +46,9 @@ src/
     scanner/
       workspaceScanner.ts               # findFiles glob (.ts/.tsx/.js/.jsx)
       deprecatedScanner.ts              # ts.Program; scanForDeprecated() e scanSingleFile()
+      scanGroupWorker.ts                # worker_threads: createProgram + scan por grupo
+      scanGroupWorkerHost.ts            # arranque do worker + heartbeat de progresso
+      scanProgressTypes.ts              # ScanProgressMessage (UI + scanner)
       tsDeprecatedScanner.ts            # AST visitor; @deprecated + resolução de props JSX pelo tipo da tag (ex.: antd Modal)
       suggestionParser.ts               # regex livres → suggestion: string | undefined
       importResolver.ts                 # identifica import de origem do símbolo
@@ -101,7 +105,7 @@ Comandos com **Não** em «Visível na palette» usam `when: false` em `package.
 |---|---|---|---|
 | `deprecatedFinder.scan` | Deprecated Finder: Scan workspace | Sim | Palette; botão **Re-scan** na sidebar ou painel tabular |
 | `deprecatedFinder.openPanel` | Deprecated Finder: Open panel | Sim | Palette (ou atalho definido pelo utilizador) |
-| `deprecatedFinder.fixAll` | Deprecated Finder: Fix all | Sim | Palette; **Fix all** na sidebar ou painel tabular |
+| `deprecatedFinder.fixAll` | Deprecated Finder: Fix all | Sim | Paleta (**store inteiro**); **Fix all** na sidebar ou painel (**filtrado** pela pesquisa quando aplicável) |
 | `deprecatedFinder.fixItem` | Deprecated Finder: Fix item | Não | **Fix** na sidebar/painel; Quick Fix no editor. Args: `itemId: string` |
 | `deprecatedFinder.openFile` | Deprecated Finder: Open file at line | Não | Clique numa linha de resultado. Args: `filePath` (absoluto), `line` (1-based) |
 
@@ -111,8 +115,8 @@ Comandos com **Não** em «Visível na palette» usam `when: false` em `package.
 
 ## Progresso na varredura
 
-- Fase **indeterminada** enquanto o TypeScript monta o `Program` (`createProgram`), onde o custo costuma concentrar-se em workspaces grandes.
-- Fase **determinada** (`analisando i / N` arquivos raiz) durante o passe que lê cada `SourceFile` do workspace.
+- Fase **indeterminada** ao localizar ficheiros e ao preparar cada grupo: mensagem com **número de ficheiros raiz** do grupo; durante `createProgram` no **worker**, o host envia atualização a cada segundo com **tempo decorrido** até começar a análise ficheiro a ficheiro.
+- Fase **determinada** (`Analyzing i / N` ou texto *post-fix*) durante o passe que lê cada ficheiro do grupo (no worker ou síncrono em *fallback*).
 
 ## Limitações conhecidas (v0.1)
 

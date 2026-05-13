@@ -49,6 +49,10 @@ The extension runs two kinds of scan:
 
 **Queued full scans:** If you trigger a new workspace scan while another is still running (for example activation scan plus an immediate **Re-scan**), the new request **waits in line** until the current scan finishes, then runs. That avoids the progress text getting stuck (for example on “Building program (1/2)” between tsconfig groups) when a second overlapping scan used to advance the internal serial and silence further progress from the first run. `scanRequestSerial` still guards `deprecatedStore.set` and the summary toast inside each run for consistency. With **`deprecatedFinder.verboseLogging`**, a superseded run may log `Superseded workspace scan discarded …` if that path is ever hit.
 
+**Large workspaces (slow `createProgram`):** For each tsconfig group, the extension **yields** to the UI thread, posts how many **root files** are in the group, then runs `ts.createProgram` and file analysis inside a **Node worker** (`scanGroupWorker`). While the worker is compiling, the sidebar shows **elapsed seconds** every second so the scan does not look frozen. If the worker cannot start, the extension **falls back** to the previous in-process scan and logs a line to **Output → Deprecated Finder** (always; verbose mode is not required for that fallback line).
+
+**Filtered Fix all:** In the **sidebar** and **tabular panel**, type in the search box to narrow the list. **Fix all (N)** counts only **visible rows that have a suggestion**; clicking it sends those item IDs to the extension so only that subset is fixed. The **Command Palette** command **Deprecated Finder: Fix all** (no arguments) still fixes **every** fixable item in the store, since the palette has no search filter. Webviews reject more than **100,000** IDs per message.
+
 ### Available commands
 
 Every `deprecatedFinder.*` command is listed below. **Visible in Command Palette** means it appears in `Ctrl+Shift+P`. Commands marked **No** are hidden there (`when: false` in `package.json`) so the palette stays short; they still run from the sidebar, tabular panel, Quick Fix, and from `vscode.commands.executeCommand()` (including custom keybindings you add in `keybindings.json`).
@@ -57,7 +61,7 @@ Every `deprecatedFinder.*` command is listed below. **Visible in Command Palette
 |---|---|---|---|---|
 | `deprecatedFinder.scan` | Deprecated Finder: Scan workspace | Re-scan all supported files in the workspace | Yes | Command Palette; **Re-scan** in sidebar or tabular panel |
 | `deprecatedFinder.openPanel` | Deprecated Finder: Open panel | Open the tabular panel with all results | Yes | Command Palette (or a keybinding you assign) |
-| `deprecatedFinder.fixAll` | Deprecated Finder: Fix all | Apply every available replacement that has a parsed suggestion | Yes | Command Palette; **Fix all** in sidebar or tabular panel |
+| `deprecatedFinder.fixAll` | Deprecated Finder: Fix all | Apply replacements: **from the palette**, every fixable item in the store; **from the sidebar or panel**, only the items visible in the list after search (must have a parsed suggestion) | Yes | Command Palette (**whole store**); **Fix all** in sidebar or tabular panel (**filtered** when a search is active) |
 | `deprecatedFinder.fixItem` | Deprecated Finder: Fix item | Apply the fix for a single stored item | No | **Fix** in sidebar or tabular panel; editor Quick Fix (`Ctrl+.`). Arguments: `itemId: string` |
 | `deprecatedFinder.openFile` | Deprecated Finder: Open file at line | Open a file and move the cursor to a line | No | Clicking a result row in sidebar or tabular panel. Arguments: `filePath: string` (absolute), `line: number` (1-based) |
 
