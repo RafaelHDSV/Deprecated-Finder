@@ -22,6 +22,7 @@ Issue de origem: `.issues/github/ISSUE-001-deprecated-finder.md`.
 - **npm** como gerenciador oficial (`package-lock.json`; CI com `npm ci`)
 - Configurações `deprecatedFinder.showScanSummary` e `deprecatedFinder.verboseLogging` (`package.json` → Settings); diagnóstico verboso e avisos do scan no painel **Output → Deprecated Finder**
 - Durante `scanForDeprecated`, saves disparam `scanSingleFile` em modo **fila + flush** (sem `updateFile` intermédio) — ver `context.md` fluxo e README **Scan behavior**
+- Pedidos de scan global concorrentes: **epoch** (`scanRequestSerial`) — só o scan mais recente aplica `set`/toast/progress; execuções obsoletas não sobrescrevem a lista (ver README)
 - Mensagens `postMessage` da webview (sidebar + painel) validadas em `src/webview/webviewMessageValidation.ts`; payloads inválidos ignorados (log `[webview]` só com `verboseLogging`)
 - TypeScript (`commonjs`, target ES2020)
 - VS Code Extension API (`@types/vscode ^1.100`)
@@ -67,7 +68,7 @@ out/                                    # build output (gitignored)
 
 ### Coordenação scan completo vs incremental
 
-Enquanto `scanForDeprecated` está ativo (`fullWorkspaceScanDepth > 0`), chamadas a `scanSingleFile` **não** fazem `deprecatedStore.updateFile` de imediato: o path entra numa fila deduplicada por `normalizePathForComparison`. Quando o scan completo mais externo termina (`finally` após `set`), corre-se **flush**: `scanSingleFile` para cada path em fila, atualizando ficheiros que mudaram durante o scan global. Evita lista “mista” (um ficheiro novo + resto antigo). Ver README **Scan behavior**.
+Enquanto `scanForDeprecated` está ativo (`fullWorkspaceScanDepth > 0`), chamadas a `scanSingleFile` **não** fazem `deprecatedStore.updateFile` de imediato: o path entra numa fila deduplicada por `normalizePathForComparison`. Quando o scan completo mais externo termina (`finally` após `set`), corre-se **flush**: `scanSingleFile` para cada path em fila, atualizando ficheiros que mudaram durante o scan global. Evita lista “mista” (um ficheiro novo + resto antigo). **Scans globais em paralelo:** um contador monotónico (`scanRequestSerial`) garante que só o pedido mais recente aplica `set`/toast e atualizações de progresso; scans mais antigos que terminam depois não sobrescrevem a lista (ver README **Concurrent full scans**).
 
 ```
 ativação                ┐

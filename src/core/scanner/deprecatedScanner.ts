@@ -14,6 +14,13 @@ import { scanFileForDeprecated } from './tsDeprecatedScanner'
 import { scanWorkspaceFiles } from './workspaceScanner'
 
 /**
+ * Monotonic serial: only the latest `scanForDeprecated` request may call
+ * `deprecatedStore.set`, show the summary toast, and drive `onProgress`.
+ * Older runs that finish later no-op those effects (concurrent-scan races).
+ */
+let scanRequestSerial = 0
+
+/**
  * Full workspace scan (`scanForDeprecated`) vs incremental (`scanSingleFile`):
  * while a full scan runs, incremental updates must not call `deprecatedStore.updateFile`,
  * or the sidebar would briefly show a mix of one fresh file and stale entries for others.
@@ -335,6 +342,8 @@ function collectFromProgramWithProgress(
  * list with `deprecatedStore.set`. Re-entrant safe (`fullWorkspaceScanDepth`).
  * Single-file rescans requested during this call are queued and run after the outermost
  * invocation completes (see `scanSingleFile`).
+ * Concurrent overlapping scans use `scanRequestSerial` so only the latest request
+ * applies progress, `set`, and the summary toast; older runs discard those effects.
  */
 export async function scanForDeprecated(
   onProgress?: ProgressCallback,
@@ -342,11 +351,19 @@ export async function scanForDeprecated(
 ): Promise<DeprecatedItem[]> {
   fullWorkspaceScanDepth++
   try {
+  const mySerial = ++scanRequestSerial
+  const reportProgress: ProgressCallback = (update) => {
+    if (mySerial !== scanRequestSerial) {
+      return
+    }
+    onProgress?.(update)
+  }
+
   const narrative: ScanNarrative = options?.narrative ?? 'default'
   const postFix = narrative === 'post-fix'
   const summaryMode = getShowScanSummary()
 
-  onProgress?.({
+  reportProgress({
     kind: 'indeterminate',
     message: postFix
       ? 'Re-scanning workspace: locating source files…'
@@ -357,6 +374,9 @@ export async function scanForDeprecated(
   const files = await scanWorkspaceFiles()
 
   if (files.length === 0) {
+    if (mySerial !== scanRequestSerial) {
+      return []
+    }
     deprecatedStore.set([])
     vscode.window.showInformationMessage(
       'Deprecated Finder: no source files found in the workspace.'
@@ -366,7 +386,7 @@ export async function scanForDeprecated(
 
   const filePaths = files.map((f) => f.fsPath)
 
-  onProgress?.({
+  reportProgress({
     kind: 'indeterminate',
     message: postFix
       ? `Re-scanning workspace: preparing (${filePaths.length} source files)…`
@@ -383,7 +403,7 @@ export async function scanForDeprecated(
 
   for (const [groupKey, paths] of groups) {
     groupIndex++
-    onProgress?.({
+    reportProgress({
       kind: 'indeterminate',
       message: postFix
         ? groupCount > 1
@@ -404,15 +424,17 @@ export async function scanForDeprecated(
       : FALLBACK_OPTIONS
     const effectiveLabel = expanded?.effectiveConfigPath ?? '(fallback options)'
 
-    logScanDiagnostic(
-      `[Deprecated Finder] Program for group "${groupKey}": ${paths.length} file(s); tsconfig: ${effectiveLabel}`
-    )
+    if (mySerial === scanRequestSerial) {
+      logScanDiagnostic(
+        `[Deprecated Finder] Program for group "${groupKey}": ${paths.length} file(s); tsconfig: ${effectiveLabel}`
+      )
+    }
 
     const program = ts.createProgram(paths, compilerOptions)
     const chunk = collectFromProgramWithProgress(
       program,
       paths,
-      onProgress,
+      reportProgress,
       progress,
       narrative
     )
@@ -422,6 +444,13 @@ export async function scanForDeprecated(
   }
 
   const items = Array.from(map.values())
+
+  if (mySerial !== scanRequestSerial) {
+    logScanDiagnostic(
+      `[Deprecated Finder] Superseded workspace scan discarded (${items.length} item(s) not applied)`
+    )
+    return items
+  }
 
   deprecatedStore.set(items)
 
