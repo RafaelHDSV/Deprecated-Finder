@@ -5,7 +5,7 @@ VS Code / Cursor extension that scans your workspace for `@deprecated` symbols, 
 > Stop hunting for crossed-out APIs in your code. Let the IDE collect them and apply the vendor-recommended fix for you.
 
 <p align="center">
-  <img href="./demo.mp4" />
+  https://github.com/user-attachments/assets/dc1909a9-973c-4b39-8f98-6fb5bf9af6be
 </p>
 
 ## What it does
