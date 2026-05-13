@@ -1,19 +1,19 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.MAX_ITEMS_V2 = exports.MAX_ITEMS = void 0;
+exports.LIMIT_CAP = exports.MAX_ITEMS = void 0;
 exports.oldGreeting = oldGreeting;
-exports.newGreeting = newGreeting;
+exports.formatUserGreeting = formatUserGreeting;
 /**
- * Prefer {@link newGreeting} for user-facing strings.
- * @deprecated use newGreeting instead
+ * Prefer formatUserGreeting for user-facing strings.
+ * @deprecated use formatUserGreeting instead
  */
 function oldGreeting(name) {
     return `Hello, ${name}`;
 }
-function newGreeting(name) {
+function formatUserGreeting(name) {
     return `Hi there, ${name}!`;
 }
-/** @deprecated replaced by MAX_ITEMS_V2 */
+/** @deprecated use LIMIT_CAP instead */
 exports.MAX_ITEMS = 10;
-exports.MAX_ITEMS_V2 = 100;
+exports.LIMIT_CAP = 100;
 //# sourceMappingURL=legacy-api.js.map
