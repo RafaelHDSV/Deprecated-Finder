@@ -38,7 +38,7 @@ Objetivo: um vídeo curto e claro que mostre **problema → solução** e as fun
 | 1 | Abrir um workspace com `.ts` / `.tsx` | “Abro o projeto…” |
 | 2 | Clicar no ícone **Deprecated Finder** na barra lateral | “A extensão varre o workspace.” |
 | 3 | Mostrar a barra de progresso (incl. mensagens com grupo / tempo se for repo maior) | “Em projetos grandes vês progresso durante a compilação TypeScript.” |
-| 4 | Lista agrupada por ficheiro com vários itens | “Cada linha é um uso (ou declaração) com `@deprecated`.” |
+| 4 | Lista agrupada por ficheiro com vários itens | “Cada linha é um uso de uma API marcada como `@deprecated`.” |
 
 ---
 

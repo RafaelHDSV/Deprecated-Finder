@@ -6,12 +6,11 @@
 
 Extensão VS Code / Cursor que:
 
-1. Varre o workspace e detecta símbolos marcados com `@deprecated` no JSDoc.
+1. Varre o workspace e detecta **usos** de símbolos cuja declaração está marcada com `@deprecated` no JSDoc (chamadas, props JSX, refs). O ponto de declaração é a **origem** da deprecação e não aparece na lista — só os usos a corrigir.
 2. Extrai do próprio texto da tag a sugestão de substituição.
 3. Permite ao usuário corrigir cada ocorrência (ou todas) com um clique, atualizando identificador **e** import quando aplicável.
 4. Re-escaneia automaticamente o arquivo salvo (não o workspace inteiro).
-5. Lista também o **próprio símbolo** na declaração quando há `@deprecated` no JSDoc (não só usos), para APIs recém-marcadas sem chamadas no arquivo.
-6. Oferece Quick Fix (lightbulb) no editor.
+5. Oferece Quick Fix (lightbulb) no editor.
 
 Linguagens suportadas: `.ts`, `.tsx`, `.js`, `.jsx`.
 
