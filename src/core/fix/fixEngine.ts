@@ -1,7 +1,9 @@
 import * as ts from 'typescript'
 import * as vscode from 'vscode'
-import { DeprecatedItem } from '../model/DeprecatedItem'
+import { DeprecatedItem, ImportInfo } from '../model/DeprecatedItem'
 import { logScanWarning } from '../../logging/deprecatedFinderLog'
+
+type FixableItem = DeprecatedItem & { importInfo: ImportInfo; suggestion: string }
 
 export interface FixSummary {
   fixed: number
@@ -33,9 +35,13 @@ export async function fixItem(item: DeprecatedItem): Promise<boolean> {
   const document = await vscode.workspace.openTextDocument(uri)
   const edit = new vscode.WorkspaceEdit()
 
-  const applied = buildEditForItem(document, item, edit)
+  const applied = buildIdentifierEditForItem(document, item, edit)
   if (!applied) {
     return false
+  }
+
+  if (isFixableItem(item)) {
+    buildImportEditsForFile(document, [item], edit)
   }
 
   const success = await vscode.workspace.applyEdit(edit)
@@ -52,6 +58,11 @@ export async function fixItem(item: DeprecatedItem): Promise<boolean> {
  * skipped. Each file is opened, edited, **applied**, and **saved** in sequence
  * so a failure on one file does not leave hundreds of dirty buffers unsaved
  * and does not block persisting earlier files.
+ *
+ * Imports are handled in **one pass per file**: every deprecated symbol in the
+ * same `ImportDeclaration` is renamed in a single combined edit. Doing it
+ * per-item would queue N overlapping `edit.replace` calls on the same import
+ * range, which `applyEdit` rejects (the source of the early-Fix-all hang).
  */
 export async function fixAll(
   items: DeprecatedItem[],
@@ -82,23 +93,17 @@ export async function fixAll(
     const document = await vscode.workspace.openTextDocument(uri)
     const edit = new vscode.WorkspaceEdit()
     const sortedItems = sortItemsForBatch(fileItems)
-    const importsHandled = new Set<string>()
     let itemsApplied = 0
 
     for (const item of sortedItems) {
-      const importKey = item.importInfo
-        ? `${item.importInfo.moduleSpecifier}:${item.importInfo.importedName}`
-        : ''
-
-      const handleImport =
-        item.importInfo && !importsHandled.has(importKey)
-
-      if (buildEditForItem(document, item, edit, handleImport)) {
+      if (buildIdentifierEditForItem(document, item, edit)) {
         itemsApplied++
-        if (handleImport && importKey) {
-          importsHandled.add(importKey)
-        }
       }
+    }
+
+    const importable = fileItems.filter(isFixableItem)
+    if (importable.length > 0) {
+      buildImportEditsForFile(document, importable, edit)
     }
 
     if (itemsApplied === 0) {
@@ -138,11 +143,14 @@ export async function fixAll(
   return { fixed, skipped, files: filesSaved }
 }
 
-function buildEditForItem(
+function isFixableItem(item: DeprecatedItem): item is FixableItem {
+  return Boolean(item.importInfo && item.suggestion)
+}
+
+function buildIdentifierEditForItem(
   document: vscode.TextDocument,
   item: DeprecatedItem,
-  edit: vscode.WorkspaceEdit,
-  handleImport = true
+  edit: vscode.WorkspaceEdit
 ): boolean {
   if (!item.suggestion) {
     return false
@@ -153,12 +161,6 @@ function buildEditForItem(
     for (const patch of sortJsxPatchesDescending(jsxMigration)) {
       edit.replace(document.uri, patch.range, patch.newText)
     }
-    if (handleImport && item.importInfo) {
-      const importEdit = buildImportEdit(document, item)
-      if (importEdit) {
-        edit.replace(document.uri, importEdit.range, importEdit.newText)
-      }
-    }
     return true
   }
 
@@ -168,14 +170,6 @@ function buildEditForItem(
   }
 
   edit.replace(document.uri, range, item.suggestion)
-
-  if (handleImport && item.importInfo) {
-    const importEdit = buildImportEdit(document, item)
-    if (importEdit) {
-      edit.replace(document.uri, importEdit.range, importEdit.newText)
-    }
-  }
-
   return true
 }
 
@@ -474,17 +468,29 @@ function identifierRange(
   )
 }
 
-interface ImportEdit {
-  range: vscode.Range
-  newText: string
-}
-
-function buildImportEdit(
+/**
+ * Aggregates every fixable item in `items` by the import statement that owns
+ * its symbol, then rewrites each statement **once** with all renames combined.
+ *
+ * Why a single combined edit per statement: with N deprecated symbols sharing
+ * one `ImportDeclaration`, the previous per-item code queued N `edit.replace`
+ * calls on the same range. `applyEdit` rejected the conflicting set and the
+ * whole file was silently skipped — which manifested as Fix all "hanging" right
+ * after the loading banner appeared.
+ *
+ * A statement is only rewritten when at least one of its locally bound names
+ * matches a deprecated symbol; unrelated imports are left untouched (fixes the
+ * earlier "wrong import got rewritten" bug where the first NamedImports
+ * statement in source order was hijacked just because the suggested module
+ * differed from its current module).
+ */
+function buildImportEditsForFile(
   document: vscode.TextDocument,
-  item: DeprecatedItem
-): ImportEdit | undefined {
-  if (!item.importInfo || !item.suggestion) {
-    return undefined
+  items: FixableItem[],
+  edit: vscode.WorkspaceEdit
+): void {
+  if (items.length === 0) {
+    return
   }
 
   const sourceFile = ts.createSourceFile(
@@ -503,96 +509,145 @@ function buildImportEdit(
       continue
     }
 
-    const currentModule = statement.moduleSpecifier.text
-    const originalRange = nodeRange(document, statement)
-    const newStatement = rewriteImport(statement, item, currentModule)
+    const clause = statement.importClause
+    if (!clause) {
+      continue
+    }
 
-    if (newStatement && newStatement.text !== statement.getText()) {
-      return { range: originalRange, newText: newStatement.text }
+    const matching = collectItemsForStatement(items, clause)
+    if (matching.length === 0) {
+      continue
+    }
+
+    const renames = new Map<string, string>()
+    for (const it of matching) {
+      renames.set(it.importInfo.importedName, it.suggestion)
+    }
+    const targetModule = matching[0].importInfo.moduleSpecifier
+
+    const rewritten = rewriteImport(statement, renames, targetModule)
+    if (!rewritten || rewritten.text === statement.getText()) {
+      continue
+    }
+
+    edit.replace(document.uri, nodeRange(document, statement), rewritten.text)
+  }
+}
+
+/**
+ * Items whose `importedName` is actually bound by this `ImportClause`
+ * (default binding, namespace binding, or any named element).
+ */
+function collectItemsForStatement(
+  items: FixableItem[],
+  clause: ts.ImportClause
+): FixableItem[] {
+  const localBindings = new Set<string>()
+
+  if (clause.name) {
+    localBindings.add(clause.name.text)
+  }
+
+  const namedBindings = clause.namedBindings
+  if (namedBindings) {
+    if (ts.isNamespaceImport(namedBindings)) {
+      localBindings.add(namedBindings.name.text)
+    } else if (ts.isNamedImports(namedBindings)) {
+      for (const el of namedBindings.elements) {
+        localBindings.add(el.propertyName?.text ?? el.name.text)
+      }
     }
   }
 
-  return undefined
+  return items.filter((it) => localBindings.has(it.importInfo.importedName))
 }
 
 interface RewrittenImport {
   text: string
 }
 
+/**
+ * Rebuilds a single `import` declaration applying all renames in `renames`
+ * (key = original imported name, value = replacement). Returns `undefined`
+ * when no element of the statement matched — leaving the original text
+ * untouched is critical to avoid corrupting unrelated imports.
+ */
 function rewriteImport(
   statement: ts.ImportDeclaration,
-  item: DeprecatedItem,
-  currentModule: string
+  renames: Map<string, string>,
+  targetModule: string
 ): RewrittenImport | undefined {
-  if (!item.importInfo || !item.suggestion) {
-    return undefined
-  }
-
   const clause = statement.importClause
   if (!clause) {
     return undefined
   }
 
-  const targetModule = item.importInfo.moduleSpecifier
-  const moduleChanged = targetModule !== currentModule
+  let touched = false
+  let defaultPart: string | undefined
+  let namedBindingsPart: string | undefined
 
-  if (clause.name && clause.name.text === item.importInfo.importedName) {
-    const text = `import ${item.suggestion}${
-      clause.namedBindings ? ', ' + printNamedBindings(clause.namedBindings) : ''
-    } from '${targetModule}'`
-    return { text }
+  if (clause.name) {
+    const replacement = renames.get(clause.name.text)
+    if (replacement) {
+      defaultPart = replacement
+      touched = true
+    } else {
+      defaultPart = clause.name.text
+    }
   }
 
   const namedBindings = clause.namedBindings
-  if (!namedBindings) {
-    return undefined
-  }
-
-  if (ts.isNamespaceImport(namedBindings)) {
-    if (namedBindings.name.text !== item.importInfo.importedName) {
-      return undefined
+  if (namedBindings) {
+    if (ts.isNamespaceImport(namedBindings)) {
+      const replacement = renames.get(namedBindings.name.text)
+      if (replacement) {
+        namedBindingsPart = `* as ${replacement}`
+        touched = true
+      } else {
+        namedBindingsPart = `* as ${namedBindings.name.text}`
+      }
+    } else if (ts.isNamedImports(namedBindings)) {
+      const seenLocals = new Set<string>()
+      const newElements: string[] = []
+      for (const element of namedBindings.elements) {
+        const importedName = element.propertyName?.text ?? element.name.text
+        const replacement = renames.get(importedName)
+        const localName = replacement ?? element.name.text
+        const emit = replacement ?? element.getText()
+        if (replacement) {
+          touched = true
+        }
+        if (seenLocals.has(localName)) {
+          continue
+        }
+        seenLocals.add(localName)
+        newElements.push(emit)
+      }
+      if (newElements.length > 0) {
+        namedBindingsPart = `{ ${newElements.join(', ')} }`
+      }
     }
-    const text = `import${
-      clause.name ? ' ' + clause.name.text + ',' : ''
-    } * as ${item.suggestion} from '${targetModule}'`
-    return { text }
   }
 
-  if (!ts.isNamedImports(namedBindings)) {
+  if (!touched) {
     return undefined
   }
 
-  const elements = namedBindings.elements
-  let touched = false
+  const segments: string[] = []
+  if (defaultPart) {
+    segments.push(defaultPart)
+  }
+  if (namedBindingsPart) {
+    segments.push(namedBindingsPart)
+  }
 
-  const newElements = elements.map((element) => {
-    const localName = element.name.text
-    const importedName = element.propertyName?.text ?? localName
-
-    if (importedName === item.importInfo!.importedName) {
-      touched = true
-      return item.suggestion!
-    }
-
-    return element.getText()
-  })
-
-  if (!touched && !moduleChanged) {
+  if (segments.length === 0) {
     return undefined
   }
 
-  const namedPart = `{ ${newElements.join(', ')} }`
-  const defaultPart = clause.name ? `${clause.name.text}, ` : ''
-  const text = `import ${defaultPart}${namedPart} from '${targetModule}'`
+  const typeOnly = clause.isTypeOnly ? 'type ' : ''
+  const text = `import ${typeOnly}${segments.join(', ')} from '${targetModule}'`
   return { text }
-}
-
-function printNamedBindings(bindings: ts.NamedImportBindings): string {
-  if (ts.isNamespaceImport(bindings)) {
-    return `* as ${bindings.name.text}`
-  }
-  const items = bindings.elements.map((el) => el.getText())
-  return `{ ${items.join(', ')} }`
 }
 
 function nodeRange(
