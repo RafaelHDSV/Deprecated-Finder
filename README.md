@@ -4,6 +4,15 @@ VS Code / Cursor extension that scans your workspace for `@deprecated` symbols, 
 
 > Stop hunting for crossed-out APIs in your code. Let the IDE collect them and apply the vendor-recommended fix for you.
 
+<!-- Demo Video -->
+<p align="center">
+  <a href="https://github.com/RafaelHDSV/Deprecated-Finder/assets/21200151/723d842b-ec91-4c7d-99b2-43ed203eedc3" target="_blank">
+    <img src="https://user-images.githubusercontent.com/21200151/278547706-cbf6fac7-0bd2-4e62-bb17-d8e9ddcb6800.gif" alt="Demo: Deprecated Finder in action" style="max-width:100%;">
+  </a>  
+</p>
+
+> [Assista ao vídeo de demonstração no GitHub](https://github.com/RafaelHDSV/Deprecated-Finder/assets/21200151/723d842b-ec91-4c7d-99b2-43ed203eedc3)
+
 ## What it does
 
 - Scans `.ts`, `.tsx`, `.js`, `.jsx` files in the workspace
