@@ -3,7 +3,7 @@
   "displayName": "Deprecated Finder",
   "description": "Find @deprecated symbols across your workspace and apply vendor-suggested replacements with one click.",
   "version": "1.0.0",
-  "publisher": "rafael",
+  "publisher": "RafaelVieira1720",
   "license": "MIT",
   "repository": {
     "type": "git",
