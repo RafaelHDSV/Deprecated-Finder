@@ -1,17 +1,15 @@
 import * as path from 'path'
 import * as ts from 'typescript'
 import * as vscode from 'vscode'
-import { DeprecatedItem } from '../model/DeprecatedItem'
-import { deprecatedStore } from '../state/deprecatedStore'
-import { normalizePathForComparison } from '../util/pathComparison'
 import {
   getShowScanSummary,
   logScanDiagnostic,
   logScanWarning,
   shouldToastScanResultSummary
 } from '../../logging/deprecatedFinderLog'
-import { scanFileForDeprecated } from './tsDeprecatedScanner'
-import { scanWorkspaceFiles } from './workspaceScanner'
+import { DeprecatedItem } from '../model/DeprecatedItem'
+import { deprecatedStore } from '../state/deprecatedStore'
+import { normalizePathForComparison } from '../util/pathComparison'
 import {
   collectProgramGroupInWorker,
   logWorkerFallback
@@ -22,6 +20,8 @@ import type {
   ScanNarrative,
   ScanProgressMessage
 } from './scanProgressTypes'
+import { scanFileForDeprecated } from './tsDeprecatedScanner'
+import { scanWorkspaceFiles } from './workspaceScanner'
 
 export type {
   ProgressCallback,
@@ -56,10 +56,7 @@ const pendingSingleFileRescans = new Map<string, string>()
 let flushDeferredSingleFileScans = false
 
 function queueSingleFileRescan(filePath: string) {
-  pendingSingleFileRescans.set(
-    normalizePathForComparison(filePath),
-    filePath
-  )
+  pendingSingleFileRescans.set(normalizePathForComparison(filePath), filePath)
 }
 
 async function flushPendingSingleFileRescans() {
@@ -304,7 +301,8 @@ function collectFromProgramWithProgress(
   narrative: ScanNarrative
 ): DeprecatedItem[] {
   const map = new Map<string, DeprecatedItem>()
-  const determinatePrefix = narrative === 'post-fix' ? 'Re-scanning workspace' : undefined
+  const determinatePrefix =
+    narrative === 'post-fix' ? 'Re-scanning workspace' : undefined
 
   for (const fp of pathsInGroup) {
     const sourceFile = getSourceFileForPath(program, fp)
@@ -375,149 +373,148 @@ async function runFullWorkspaceScan(
 ): Promise<DeprecatedItem[]> {
   fullWorkspaceScanDepth++
   try {
-  const mySerial = ++scanRequestSerial
-  const reportProgress: ProgressCallback = (update) => {
-    if (mySerial !== scanRequestSerial) {
-      return
+    const mySerial = ++scanRequestSerial
+    const reportProgress: ProgressCallback = (update) => {
+      if (mySerial !== scanRequestSerial) {
+        return
+      }
+      onProgress?.(update)
     }
-    onProgress?.(update)
-  }
 
-  const narrative: ScanNarrative = options?.narrative ?? 'default'
-  const postFix = narrative === 'post-fix'
-  const summaryMode = getShowScanSummary()
-
-  reportProgress({
-    kind: 'indeterminate',
-    message: postFix
-      ? 'Re-scanning workspace: locating source files…'
-      : 'Searching workspace for source files…',
-    fileCount: 0
-  })
-
-  const files = await scanWorkspaceFiles()
-
-  if (files.length === 0) {
-    if (mySerial !== scanRequestSerial) {
-      return []
-    }
-    deprecatedStore.set([])
-    vscode.window.showInformationMessage(
-      'Deprecated Finder: no source files found in the workspace.'
-    )
-    return []
-  }
-
-  const filePaths = files.map((f) => f.fsPath)
-
-  reportProgress({
-    kind: 'indeterminate',
-    message: postFix
-      ? `Re-scanning workspace: preparing (${filePaths.length} source files)…`
-      : `Preparing scan (${filePaths.length} source files)…`,
-    fileCount: 0
-  })
-
-  const groups = groupWorkspaceFilesByTsConfig(filePaths)
-  const progress = { current: 0, total: filePaths.length }
-  const map = new Map<string, DeprecatedItem>()
-
-  let groupIndex = 0
-  const groupCount = groups.size
-
-  for (const [groupKey, paths] of groups) {
-    groupIndex++
-    const baseBuildingMessage = postFix
-      ? groupCount > 1
-        ? `Re-scanning workspace: building programs (${groupIndex}/${groupCount})…`
-        : 'Re-scanning workspace: building program…'
-      : groupCount > 1
-        ? `Building program (${groupIndex}/${groupCount})…`
-        : 'Building program…'
+    const narrative: ScanNarrative = options?.narrative ?? 'default'
+    const postFix = narrative === 'post-fix'
+    const summaryMode = getShowScanSummary()
 
     reportProgress({
       kind: 'indeterminate',
-      message: `${baseBuildingMessage} (${paths.length} root file(s) in this group; compilation may take several minutes. Elapsed seconds update every second until file-by-file analysis starts.)`,
-      fileCount: paths.length
+      message: postFix
+        ? 'Re-scanning workspace: locating source files…'
+        : 'Searching workspace for source files…',
+      fileCount: 0
     })
 
-    const expanded =
-      groupKey === '__no_tsconfig__'
-        ? undefined
-        : getExpandedForSourceFile(paths[0] ?? '')
-    const compilerOptions = expanded
-      ? buildScanCompilerOptions(expanded.parsed)
-      : FALLBACK_OPTIONS
-    const effectiveLabel = expanded?.effectiveConfigPath ?? '(fallback options)'
+    const files = await scanWorkspaceFiles()
 
-    if (mySerial === scanRequestSerial) {
-      logScanDiagnostic(
-        `[Deprecated Finder] Program for group "${groupKey}": ${paths.length} file(s); tsconfig: ${effectiveLabel}`
+    if (files.length === 0) {
+      if (mySerial !== scanRequestSerial) {
+        return []
+      }
+      deprecatedStore.set([])
+      vscode.window.showInformationMessage(
+        'Deprecated Finder: no source files found in the workspace.'
       )
+      return []
     }
 
-    await yieldToEventLoop()
+    const filePaths = files.map((f) => f.fsPath)
 
-    let chunk: DeprecatedItem[]
-    try {
-      const heartbeat = (elapsedSec: number): ScanProgressMessage => ({
+    reportProgress({
+      kind: 'indeterminate',
+      message: postFix
+        ? `Re-scanning workspace: preparing (${filePaths.length} source files)…`
+        : `Preparing scan (${filePaths.length} source files)…`,
+      fileCount: 0
+    })
+
+    const groups = groupWorkspaceFilesByTsConfig(filePaths)
+    const progress = { current: 0, total: filePaths.length }
+    const map = new Map<string, DeprecatedItem>()
+
+    let groupIndex = 0
+    const groupCount = groups.size
+
+    for (const [groupKey, paths] of groups) {
+      groupIndex++
+      const baseBuildingMessage = postFix
+        ? groupCount > 1
+          ? `Re-scanning workspace: building programs (${groupIndex}/${groupCount})…`
+          : 'Re-scanning workspace: building program…'
+        : groupCount > 1
+          ? `Building program (${groupIndex}/${groupCount})…`
+          : 'Building program…'
+
+      reportProgress({
         kind: 'indeterminate',
-        message: `${baseBuildingMessage} ${elapsedSec}s elapsed — compiling ${paths.length} root file(s) in a background worker (no per-file counter until TypeScript finishes program creation).`,
+        message: `${baseBuildingMessage} (${paths.length} root file(s) in this group; compilation may take several minutes. Elapsed seconds update every second until file-by-file analysis starts.)`,
         fileCount: paths.length
       })
-      const { items: workerItems, progressCurrent } =
-        await collectProgramGroupInWorker(
-          {
-            paths,
-            compilerOptions: cloneCompilerOptionsForWorker(compilerOptions),
-            narrative,
-            progress: { current: progress.current, total: progress.total }
-          },
-          reportProgress,
-          heartbeat
+
+      const expanded =
+        groupKey === '__no_tsconfig__'
+          ? undefined
+          : getExpandedForSourceFile(paths[0] ?? '')
+      const compilerOptions = expanded
+        ? buildScanCompilerOptions(expanded.parsed)
+        : FALLBACK_OPTIONS
+      const effectiveLabel =
+        expanded?.effectiveConfigPath ?? '(fallback options)'
+
+      if (mySerial === scanRequestSerial) {
+        logScanDiagnostic(
+          `[Deprecated Finder] Program for group "${groupKey}": ${paths.length} file(s); tsconfig: ${effectiveLabel}`
         )
-      progress.current = progressCurrent
-      chunk = workerItems
-    } catch (err) {
-      logWorkerFallback(
-        err instanceof Error ? err.message : String(err)
-      )
+      }
+
       await yieldToEventLoop()
-      const program = ts.createProgram(paths, compilerOptions)
-      chunk = collectFromProgramWithProgress(
-        program,
-        paths,
-        reportProgress,
-        progress,
-        narrative
+
+      let chunk: DeprecatedItem[]
+      try {
+        const heartbeat = (elapsedSec: number): ScanProgressMessage => ({
+          kind: 'indeterminate',
+          message: `${baseBuildingMessage} ${elapsedSec}s elapsed — compiling root file(s) in a background worker. Please wait until the progress bar is updated.`,
+          fileCount: paths.length
+        })
+        const { items: workerItems, progressCurrent } =
+          await collectProgramGroupInWorker(
+            {
+              paths,
+              compilerOptions: cloneCompilerOptionsForWorker(compilerOptions),
+              narrative,
+              progress: { current: progress.current, total: progress.total }
+            },
+            reportProgress,
+            heartbeat
+          )
+        progress.current = progressCurrent
+        chunk = workerItems
+      } catch (err) {
+        logWorkerFallback(err instanceof Error ? err.message : String(err))
+        await yieldToEventLoop()
+        const program = ts.createProgram(paths, compilerOptions)
+        chunk = collectFromProgramWithProgress(
+          program,
+          paths,
+          reportProgress,
+          progress,
+          narrative
+        )
+      }
+      for (const item of chunk) {
+        map.set(item.id, item)
+      }
+    }
+
+    const items = Array.from(map.values())
+
+    if (mySerial !== scanRequestSerial) {
+      logScanDiagnostic(
+        `[Deprecated Finder] Superseded workspace scan discarded (${items.length} item(s) not applied)`
+      )
+      return items
+    }
+
+    deprecatedStore.set(items)
+
+    if (shouldToastScanResultSummary(summaryMode, items.length)) {
+      vscode.window.showInformationMessage(
+        `Deprecated Finder: found ${items.length} deprecated usage${items.length === 1 ? '' : 's'}.`
       )
     }
-    for (const item of chunk) {
-      map.set(item.id, item)
-    }
-  }
 
-  const items = Array.from(map.values())
-
-  if (mySerial !== scanRequestSerial) {
     logScanDiagnostic(
-      `[Deprecated Finder] Superseded workspace scan discarded (${items.length} item(s) not applied)`
+      `[Deprecated Finder] Workspace scan: ${items.length} item(s)`
     )
     return items
-  }
-
-  deprecatedStore.set(items)
-
-  if (shouldToastScanResultSummary(summaryMode, items.length)) {
-    vscode.window.showInformationMessage(
-      `Deprecated Finder: found ${items.length} deprecated usage${items.length === 1 ? '' : 's'}.`
-    )
-  }
-
-  logScanDiagnostic(
-    `[Deprecated Finder] Workspace scan: ${items.length} item(s)`
-  )
-  return items
   } finally {
     await leaveFullWorkspaceScan()
   }
