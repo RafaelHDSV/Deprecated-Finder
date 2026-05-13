@@ -17,7 +17,9 @@ Não é obrigatório correr `npm install` só para a demo da extensão (não há
 
 ## Depois de **Fix all** (lista completa ou filtrada)
 
-Continuam a aparecer **até dois** itens em `legacy-api.ts`: os **sítios de declaração** de `oldGreeting` e `MAX_ITEMS` (APIs ainda marcadas como obsoletas no JSDoc). Isto é **esperado** — a extensão também lista o próprio símbolo deprecado, não só os usos.
+**Fix all** e o botão **Fix** por linha só aplicam a **usos** do símbolo. As linhas do **sítio de declaração** (`legacy-api.ts`, onde está o `@deprecated`) continuam na lista com a sugestão, mas **não** entram no contador nem no lote — evita renomear o export em cima do substituto e evita a lista “crescer” após o re-scan.
+
+Continuam a aparecer **até dois** itens em `legacy-api.ts`: declarações de `oldGreeting` e `MAX_ITEMS` ainda marcadas como obsoletas no JSDoc. Isto é **esperado**.
 
 Para a lista ficar **vazia** na demo, remove ou comenta esses exports antigos (ou tira o `@deprecated`) depois de migrares os usos — passo manual opcional para o vídeo.
 

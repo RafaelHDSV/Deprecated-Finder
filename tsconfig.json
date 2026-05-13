@@ -10,5 +10,6 @@
     "skipLibCheck": true,
     "sourceMap": true
   },
-  "exclude": ["node_modules", ".vscode", "out", "**/*.js"]
+  "include": ["src/**/*"],
+  "exclude": ["node_modules", ".vscode", "out", "**/*.js", "examples"]
 }
