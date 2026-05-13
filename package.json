@@ -24,11 +24,9 @@
     "javascript",
     "refactor",
     "migration",
-    "codemod",
     "replace",
     "import",
-    "react",
-    "antd"
+    "react"
   ],
   "main": "./out/extension.js",
   "activationEvents": [
