@@ -47,7 +47,7 @@ The extension runs two kinds of scan:
 
 **What you might notice:** On a very large workspace, if you save repeatedly during a long full scan, the list for those files updates in a **batch** right after the full scan completes (not necessarily on every intermediate save). The loading banner from the full scan still reflects global progress; the narrow “Re-scanning after save” strip is unchanged for saves outside a full scan.
 
-**Concurrent full scans:** If you trigger a new workspace scan while another is still running (for example activation scan plus an immediate **Re-scan**), only the **latest** request applies `deprecatedStore.set`, the summary toast, and progress updates. An older run that finishes later discards those effects so it cannot overwrite fresher results. With **`deprecatedFinder.verboseLogging`**, a superseded run may log `Superseded workspace scan discarded …`. Overlapping scans can still duplicate CPU work; they do not corrupt the stored list.
+**Queued full scans:** If you trigger a new workspace scan while another is still running (for example activation scan plus an immediate **Re-scan**), the new request **waits in line** until the current scan finishes, then runs. That avoids the progress text getting stuck (for example on “Building program (1/2)” between tsconfig groups) when a second overlapping scan used to advance the internal serial and silence further progress from the first run. `scanRequestSerial` still guards `deprecatedStore.set` and the summary toast inside each run for consistency. With **`deprecatedFinder.verboseLogging`**, a superseded run may log `Superseded workspace scan discarded …` if that path is ever hit.
 
 ### Available commands
 

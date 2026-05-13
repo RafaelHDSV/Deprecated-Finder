@@ -16,9 +16,13 @@ import { scanWorkspaceFiles } from './workspaceScanner'
 /**
  * Monotonic serial: only the latest `scanForDeprecated` request may call
  * `deprecatedStore.set`, show the summary toast, and drive `onProgress`.
- * Older runs that finish later no-op those effects (concurrent-scan races).
+ * Full workspace scans are serialized (see `fullWorkspaceScanTurn`) so this
+ * mainly guards hypothetical future overlap; it also matches superseded logs.
  */
 let scanRequestSerial = 0
+
+/** One full workspace scan at a time — avoids progress/UI stuck mid-run when a second scan bumps the serial while the first is still in sync `createProgram` work. */
+let fullWorkspaceScanTurn: Promise<void> = Promise.resolve()
 
 /**
  * Full workspace scan (`scanForDeprecated`) vs incremental (`scanSingleFile`):
@@ -344,8 +348,26 @@ function collectFromProgramWithProgress(
  * invocation completes (see `scanSingleFile`).
  * Concurrent overlapping scans use `scanRequestSerial` so only the latest request
  * applies progress, `set`, and the summary toast; older runs discard those effects.
+ * Calls are queued on `fullWorkspaceScanTurn` so two full scans never run in parallel.
  */
 export async function scanForDeprecated(
+  onProgress?: ProgressCallback,
+  options?: ScanForDeprecatedOptions
+): Promise<DeprecatedItem[]> {
+  const previousTurn = fullWorkspaceScanTurn
+  let endTurn!: () => void
+  fullWorkspaceScanTurn = new Promise<void>((resolve) => {
+    endTurn = resolve
+  })
+  await previousTurn
+  try {
+    return await runFullWorkspaceScan(onProgress, options)
+  } finally {
+    endTurn()
+  }
+}
+
+async function runFullWorkspaceScan(
   onProgress?: ProgressCallback,
   options?: ScanForDeprecatedOptions
 ): Promise<DeprecatedItem[]> {
@@ -468,6 +490,7 @@ export async function scanForDeprecated(
     await leaveFullWorkspaceScan()
   }
 }
+
 
 /**
  * Incremental scan of one file for the sidebar / Quick Fix store.
