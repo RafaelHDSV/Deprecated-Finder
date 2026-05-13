@@ -13,6 +13,19 @@ npm run lint
 
 See the [README](README.md) **Development** section for watch mode, the Extension Development Host (`F5`), and marketplace packaging. For scan toasts and the **Output** panel, see README **Settings** (`deprecatedFinder.showScanSummary`, `deprecatedFinder.verboseLogging`). For **full vs incremental scan** ordering (save during a long workspace scan), see README **Scan behavior (full workspace vs on-save)**.
 
+## Webview `postMessage` contract
+
+Sidebar (`DeprecatedViewProvider`) and tabular panel (`deprecatedPanel`) send messages to the extension host via `vscode.postMessage`. Only these shapes are accepted; anything else is **ignored** (no exception). With **`deprecatedFinder.verboseLogging`**, a line `[webview] ignored invalid or unknown message: …` is written to **Output → Deprecated Finder**.
+
+| `type` | Required fields | Notes |
+|---|---|---|
+| `openFile` | `filePath` (non-empty string), `line` (integer ≥ 1) | `line` must be a **number** (not a string); 1-based line index. |
+| `fixItem` | `itemId` (non-empty string) | Whitespace trimmed. |
+| `fixAll` | — | Extra properties ignored. |
+| `rescan` | — | Extra properties ignored. |
+
+Implementation: `src/webview/webviewMessageValidation.ts` (`parseWebviewMessage`, `handleWebviewInboundMessage`). If you change the inline `<script>` in the webviews, keep this contract in sync.
+
 ## Path comparison policy
 
 The extension compares file paths from different sources (VS Code `Uri.fsPath`, `TextDocument.fileName`, TypeScript `SourceFile.fileName`). Rules:

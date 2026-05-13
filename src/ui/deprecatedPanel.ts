@@ -1,6 +1,7 @@
 import * as vscode from 'vscode'
 import { deprecatedStore } from '../core/state/deprecatedStore'
 import { getDeprecatedPanelHtml } from './deprecatedPanelHtml'
+import { handleWebviewInboundMessage } from '../webview/webviewMessageValidation'
 
 let panel: vscode.WebviewPanel | undefined
 let unsubscribe: (() => void) | undefined
@@ -29,27 +30,7 @@ export function openDeprecatedPanel(_context: vscode.ExtensionContext) {
   unsubscribe = deprecatedStore.onChange(render)
 
   panel.webview.onDidReceiveMessage((message) => {
-    switch (message?.type) {
-      case 'openFile':
-        vscode.commands.executeCommand(
-          'deprecatedFinder.openFile',
-          message.filePath,
-          message.line
-        )
-        return
-      case 'fixItem':
-        vscode.commands.executeCommand(
-          'deprecatedFinder.fixItem',
-          message.itemId
-        )
-        return
-      case 'fixAll':
-        vscode.commands.executeCommand('deprecatedFinder.fixAll')
-        return
-      case 'rescan':
-        vscode.commands.executeCommand('deprecatedFinder.scan')
-        return
-    }
+    handleWebviewInboundMessage(message)
   })
 
   panel.onDidDispose(() => {

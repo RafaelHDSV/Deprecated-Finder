@@ -2,6 +2,7 @@ import * as vscode from 'vscode'
 import { deprecatedStore } from '../core/state/deprecatedStore'
 import { DeprecatedItem } from '../core/model/DeprecatedItem'
 import type { ScanProgressMessage } from '../core/scanner/deprecatedScanner'
+import { handleWebviewInboundMessage } from '../webview/webviewMessageValidation'
 
 export class DeprecatedViewProvider implements vscode.WebviewViewProvider {
   public static readonly viewType = 'deprecatedFinder.view'
@@ -40,7 +41,7 @@ export class DeprecatedViewProvider implements vscode.WebviewViewProvider {
     })
 
     webviewView.webview.onDidReceiveMessage((message) => {
-      this.handleMessage(message)
+      handleWebviewInboundMessage(message)
     })
 
     this.refresh()
@@ -84,30 +85,6 @@ export class DeprecatedViewProvider implements vscode.WebviewViewProvider {
     if (this.fileRescanDepth === 0) {
       this.view?.webview.postMessage({ type: 'activity', show: false })
       this.refresh()
-    }
-  }
-
-  private handleMessage(message: { type: string; [key: string]: unknown }) {
-    switch (message.type) {
-      case 'openFile':
-        vscode.commands.executeCommand(
-          'deprecatedFinder.openFile',
-          message.filePath as string,
-          message.line as number
-        )
-        return
-      case 'fixItem':
-        vscode.commands.executeCommand(
-          'deprecatedFinder.fixItem',
-          message.itemId as string
-        )
-        return
-      case 'fixAll':
-        vscode.commands.executeCommand('deprecatedFinder.fixAll')
-        return
-      case 'rescan':
-        vscode.commands.executeCommand('deprecatedFinder.scan')
-        return
     }
   }
 

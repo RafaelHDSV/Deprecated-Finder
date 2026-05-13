@@ -22,6 +22,7 @@ Issue de origem: `.issues/github/ISSUE-001-deprecated-finder.md`.
 - **npm** como gerenciador oficial (`package-lock.json`; CI com `npm ci`)
 - Configurações `deprecatedFinder.showScanSummary` e `deprecatedFinder.verboseLogging` (`package.json` → Settings); diagnóstico verboso e avisos do scan no painel **Output → Deprecated Finder**
 - Durante `scanForDeprecated`, saves disparam `scanSingleFile` em modo **fila + flush** (sem `updateFile` intermédio) — ver `context.md` fluxo e README **Scan behavior**
+- Mensagens `postMessage` da webview (sidebar + painel) validadas em `src/webview/webviewMessageValidation.ts`; payloads inválidos ignorados (log `[webview]` só com `verboseLogging`)
 - TypeScript (`commonjs`, target ES2020)
 - VS Code Extension API (`@types/vscode ^1.100`)
 - TypeScript Compiler API (`typescript` em `dependencies`, runtime)
@@ -35,6 +36,8 @@ src/
   extension.ts                          # entry point: comandos, listeners, providers
   logging/
     deprecatedFinderLog.ts              # Output channel; scan diagnostics / warn / error
+  webview/
+    webviewMessageValidation.ts         # parse + dispatch postMessage from sidebar / panel
   core/
     model/DeprecatedItem.ts             # tipos: DeprecatedItem, ImportInfo
     state/deprecatedStore.ts            # store em memória + pub/sub para a UI
