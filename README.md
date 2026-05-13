@@ -4,7 +4,16 @@ VS Code / Cursor extension that scans your workspace for `@deprecated` symbols, 
 
 > Stop hunting for crossed-out APIs in your code. Let the IDE collect them and apply the vendor-recommended fix for you.
 
-https://github.com/user-attachments/assets/dc1909a9-973c-4b39-8f98-6fb5bf9af6be
+<p align="center">
+  <video controls width="720" style="max-width:100%;">
+    <source
+      src="https://raw.githubusercontent.com/RafaelHDSV/Deprecated-Finder/main/demo.mp4"
+      type="video/mp4"
+    />
+  </video>
+  <br />
+  <a href="https://github.com/RafaelHDSV/Deprecated-Finder/blob/main/demo.mp4">Open demo (MP4)</a> if the preview does not load.
+</p>
 
 ## What it does
 

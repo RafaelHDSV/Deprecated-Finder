@@ -49,9 +49,9 @@ Revisa antes de publicar:
 
 - `version` em `package.json` (semver).
 - `displayName`, `description`, `repository`, `license`, `engines.vscode`.
-- `README.md` na raiz (o Marketplace mostra-o na página da extensão).
+- `README.md` na raiz (o Marketplace mostra-o na página da extensão). Vídeo: usar `<video>` com URL **HTTPS absoluta** (ex. `raw.githubusercontent.com/.../demo.mp4`); caminhos relativos ou só URL solta costumam **não** renderizar na loja.
 - `CHANGELOG.md` na raiz (recomendado pelo Marketplace; mantém o histórico de versões).
-- Ícones em `media/` referenciados em `package.json`.
+- **`icon` na raiz do `package.json`**: ficheiro **PNG ≥ 128×128** (ex. `media/icon.png`); o ícone da **activity bar** pode continuar em SVG em `contributes`, mas o **tile** do Marketplace usa o `icon` PNG.
 
 ---
 

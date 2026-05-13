@@ -2,9 +2,10 @@
   "name": "deprecated-finder",
   "displayName": "Deprecated Finder",
   "description": "Find @deprecated symbols across your workspace and apply vendor-suggested replacements with one click.",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "publisher": "RafaelVieira1720",
   "license": "MIT",
+  "icon": "media/icon.png",
   "repository": {
     "type": "git",
     "url": "https://github.com/RafaelHDSV/Deprecated-Finder"
@@ -13,16 +14,21 @@
     "vscode": "^1.100.0"
   },
   "categories": [
-    "Linters",
+    "Programming Languages",
     "Other"
   ],
   "keywords": [
     "deprecated",
+    "jsdoc",
+    "typescript",
+    "javascript",
     "refactor",
+    "migration",
     "codemod",
-    "fix",
-    "antd",
-    "ant design"
+    "replace",
+    "import",
+    "react",
+    "antd"
   ],
   "main": "./out/extension.js",
   "activationEvents": [
@@ -117,7 +123,8 @@
     "vscode:prepublish": "npm run compile",
     "compile": "tsc -p ./",
     "lint": "eslint",
-    "watch": "tsc -watch -p ./"
+    "watch": "tsc -watch -p ./",
+    "icon:rasterize": "node scripts/rasterize-icon.cjs"
   },
   "dependencies": {
     "typescript": "^5.8.2"
@@ -128,6 +135,7 @@
     "@types/node": "^22.19.19",
     "@types/vscode": "^1.100.0",
     "eslint": "^9.13.0",
+    "sharp": "^0.33.5",
     "typescript-eslint": "^8.26.0"
   }
 }

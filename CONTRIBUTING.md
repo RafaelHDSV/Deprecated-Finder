@@ -13,6 +13,8 @@ npm run lint
 
 See the [README](README.md) **Development** section for watch mode, the Extension Development Host (`F5`), and marketplace packaging. For scan toasts and the **Output** panel, see README **Settings** (`deprecatedFinder.showScanSummary`, `deprecatedFinder.verboseLogging`). For **full vs incremental scan** ordering (save during a long workspace scan), see README **Scan behavior (full workspace vs on-save)**.
 
+**Marketplace icon:** `package.json` uses `media/icon.png` (128×128). The activity bar keeps `media/icon.svg`. After editing the SVG, run `npm run icon:rasterize` to regenerate the PNG (devDependency `sharp`).
+
 ## Webview `postMessage` contract
 
 Sidebar (`DeprecatedViewProvider`) and tabular panel (`deprecatedPanel`) send messages to the extension host via `vscode.postMessage`. Only these shapes are accepted; anything else is **ignored** (no exception). With **`deprecatedFinder.verboseLogging`**, a line `[webview] ignored invalid or unknown message: …` is written to **Output → Deprecated Finder**.

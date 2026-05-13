@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.1] - 2026-05-13
+
+### Fixed
+
+- Marketplace **icon**: root `icon` points to `media/icon.png` (128×128), rasterized from `media/icon.svg` via `npm run icon:rasterize` (Sharp); activity bar keeps the SVG.
+- Marketplace **README video**: use `<video><source></video>` with an absolute **HTTPS** URL (`raw.githubusercontent.com`) so the preview renders in the extension page; fallback link to the MP4 on GitHub.
+
+### Changed
+
+- `categories` set to **Programming Languages** + **Other** (closer scope than Linters).
+- `keywords` expanded (jsdoc, typescript, javascript, migration, replace, import, react) and trimmed redundant “ant design” phrase.
+
 ## [1.0.0] - 2026-05-12
 
 ### Added
@@ -21,4 +33,5 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Full-workspace scan queueing, progress in the UI, and optional worker-based `createProgram` per tsconfig group with heartbeat logging.
 - Settings: `deprecatedFinder.showScanSummary`, `deprecatedFinder.verboseLogging`; output channel **Deprecated Finder**.
 
+[1.0.1]: https://github.com/RafaelHDSV/Deprecated-Finder/releases
 [1.0.0]: https://github.com/RafaelHDSV/Deprecated-Finder/releases
