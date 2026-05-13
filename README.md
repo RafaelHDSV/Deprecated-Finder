@@ -5,7 +5,7 @@ VS Code / Cursor extension that scans your workspace for `@deprecated` symbols, 
 > Stop hunting for crossed-out APIs in your code. Let the IDE collect them and apply the vendor-recommended fix for you.
 
 <p align="center">
-  <a href="./demo.mp4"><strong>▶ Watch demo video</strong></a> — opens on GitHub’s file page with the built-in player (README cannot embed a repo-relative MP4 in a <code>&lt;video&gt;</code> tag).
+  <img href="./demo.mp4" />
 </p>
 
 ## What it does
