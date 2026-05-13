@@ -2,7 +2,7 @@
   "name": "deprecated-finder",
   "displayName": "Deprecated Finder",
   "description": "Find @deprecated symbols across your workspace and apply vendor-suggested replacements with one click.",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "publisher": "rafael",
   "license": "MIT",
   "repository": {
@@ -93,7 +93,11 @@
         "deprecatedFinder.showScanSummary": {
           "type": "string",
           "default": "whenIssuesFound",
-          "enum": ["always", "whenIssuesFound", "never"],
+          "enum": [
+            "always",
+            "whenIssuesFound",
+            "never"
+          ],
           "enumDescriptions": [
             "Show an information notification after every workspace scan that found source files.",
             "Show that notification only when at least one deprecated usage was found.",
