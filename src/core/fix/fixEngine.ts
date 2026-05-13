@@ -1,6 +1,7 @@
 import * as ts from 'typescript'
 import * as vscode from 'vscode'
 import { DeprecatedItem } from '../model/DeprecatedItem'
+import { logScanWarning } from '../../logging/deprecatedFinderLog'
 
 export interface FixSummary {
   fixed: number
@@ -48,7 +49,9 @@ export async function fixItem(item: DeprecatedItem): Promise<boolean> {
 
 /**
  * Applies fixes for several deprecated items. Items without suggestion are
- * skipped. Edits are batched per file to avoid offset drift.
+ * skipped. Each file is opened, edited, **applied**, and **saved** in sequence
+ * so a failure on one file does not leave hundreds of dirty buffers unsaved
+ * and does not block persisting earlier files.
  */
 export async function fixAll(
   items: DeprecatedItem[],
@@ -62,19 +65,25 @@ export async function fixAll(
   }
 
   const byFile = groupByFile(fixable)
-  const edit = new vscode.WorkspaceEdit()
-  const touchedDocs: vscode.TextDocument[] = []
-  let fixed = 0
   const fileEntries = Array.from(byFile.entries())
   const totalFiles = fileEntries.length
+  let fixed = 0
+  let filesSaved = 0
 
-  for (const [filePath, fileItems] of fileEntries) {
+  for (let fi = 0; fi < fileEntries.length; fi++) {
+    const [filePath, fileItems] = fileEntries[fi]
+    onProgress?.({
+      phase: 'editing',
+      current: fi + 1,
+      total: totalFiles
+    })
+
     const uri = vscode.Uri.file(filePath)
     const document = await vscode.workspace.openTextDocument(uri)
-    touchedDocs.push(document)
-
+    const edit = new vscode.WorkspaceEdit()
     const sortedItems = sortItemsForBatch(fileItems)
     const importsHandled = new Set<string>()
+    let itemsApplied = 0
 
     for (const item of sortedItems) {
       const importKey = item.importInfo
@@ -85,36 +94,48 @@ export async function fixAll(
         item.importInfo && !importsHandled.has(importKey)
 
       if (buildEditForItem(document, item, edit, handleImport)) {
-        fixed++
+        itemsApplied++
         if (handleImport && importKey) {
           importsHandled.add(importKey)
         }
       }
     }
 
-    onProgress?.({
-      phase: 'editing',
-      current: touchedDocs.length,
-      total: totalFiles
-    })
+    if (itemsApplied === 0) {
+      continue
+    }
+
+    const appliedOk = await vscode.workspace.applyEdit(edit)
+    if (!appliedOk) {
+      logScanWarning(`Fix all: applyEdit was rejected for ${filePath}`)
+      continue
+    }
+
+    try {
+      const saved = await document.save()
+      if (!saved) {
+        logScanWarning(
+          `Fix all: document.save() returned false for ${filePath} (buffer may still be dirty)`
+        )
+        continue
+      }
+      fixed += itemsApplied
+      filesSaved++
+      onProgress?.({
+        phase: 'saving',
+        current: filesSaved,
+        total: totalFiles
+      })
+    } catch (e) {
+      logScanWarning(
+        `Fix all: document.save() failed for ${filePath}: ${
+          e instanceof Error ? e.message : String(e)
+        }`
+      )
+    }
   }
 
-  const success = await vscode.workspace.applyEdit(edit)
-  if (!success) {
-    return { fixed: 0, skipped, files: 0 }
-  }
-
-  const saveTotal = touchedDocs.length
-  for (let i = 0; i < touchedDocs.length; i++) {
-    await touchedDocs[i].save()
-    onProgress?.({
-      phase: 'saving',
-      current: i + 1,
-      total: saveTotal
-    })
-  }
-
-  return { fixed, skipped, files: touchedDocs.length }
+  return { fixed, skipped, files: filesSaved }
 }
 
 function buildEditForItem(

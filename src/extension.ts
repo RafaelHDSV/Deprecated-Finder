@@ -124,11 +124,23 @@ export function activate(context: vscode.ExtensionContext) {
                 ? ` Skipped ${summary.skipped} item(s) without suggestion.`
                 : '')
           )
-          invalidateProgramCache()
-          await scanForDeprecated((update) => {
-            provider.postProgress(update)
-          }, { narrative: 'post-fix' })
+        } catch (error) {
+          logScanError('[Deprecated Finder] Fix all failed', error)
+          void vscode.window.showErrorMessage(
+            'Deprecated Finder: Fix all stopped with an error. Check Output → Deprecated Finder for details.'
+          )
         } finally {
+          try {
+            invalidateProgramCache()
+            await scanForDeprecated((update) => {
+              provider.postProgress(update)
+            }, { narrative: 'post-fix' })
+          } catch (scanError) {
+            logScanError(
+              '[Deprecated Finder] Post-fix workspace scan failed',
+              scanError
+            )
+          }
           provider.setLoading(false)
         }
       }
