@@ -122,7 +122,8 @@
     "compile": "tsc -p ./",
     "lint": "eslint",
     "watch": "tsc -watch -p ./",
-    "icon:rasterize": "node scripts/rasterize-icon.cjs"
+    "icon:rasterize": "node scripts/rasterize-icon.cjs",
+    "demo:gif": "node scripts/mp4-to-gif.cjs"
   },
   "dependencies": {
     "typescript": "^5.8.2"
@@ -133,6 +134,7 @@
     "@types/node": "^22.19.19",
     "@types/vscode": "^1.100.0",
     "eslint": "^9.13.0",
+    "ffmpeg-static": "^5.2.0",
     "sharp": "^0.33.5",
     "typescript-eslint": "^8.26.0"
   }

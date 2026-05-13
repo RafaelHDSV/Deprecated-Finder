@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- README demo: animated `media/demo.gif` (from `demo.mp4`) with `<img>` + link to MP4 for GitHub and Marketplace previews.
+
+### Added
+
+- `npm run demo:gif` (`scripts/mp4-to-gif.cjs`, devDependency `ffmpeg-static`) to regenerate the GIF after re-recording.
+
 ## [1.0.1] - 2026-05-13
 
 ### Fixed
