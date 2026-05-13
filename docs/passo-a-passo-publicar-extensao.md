@@ -33,7 +33,7 @@ Revisa antes de publicar:
 - `version` em `package.json` (semver).
 - `displayName`, `description`, `repository`, `license`, `engines.vscode`.
 - `README.md` na raiz (o Marketplace mostra-o na página da extensão).
-- `CHANGELOG.md` (recomendado pelo Marketplace; cria se ainda não existir).
+- `CHANGELOG.md` na raiz (recomendado pelo Marketplace; mantém o histórico de versões).
 - Ícones em `media/` referenciados em `package.json`.
 
 ---

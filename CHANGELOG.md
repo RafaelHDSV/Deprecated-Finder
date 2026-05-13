@@ -1,0 +1,24 @@
+# Change Log
+
+All notable changes to the **Deprecated Finder** extension are documented in this file.
+
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
+and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+## [Unreleased]
+
+## [1.0.0] - 2026-05-12
+
+### Added
+
+- Workspace scan for `@deprecated` in `.ts`, `.tsx`, `.js`, `.jsx` using the TypeScript program API (including JSX prop deprecations resolved via component types).
+- Sidebar webview listing deprecated symbols, grouped by file, with search and **Re-scan**.
+- Optional tabular webview panel with the same actions.
+- **Fix** per item and **Fix all** (full store or filtered by visible rows), rewriting identifiers and matching `import` statements when applicable.
+- Quick Fix (`Ctrl+.`) in the editor for deprecated symbols at the cursor.
+- Declaration sites listed with `atDeclarationSite` (no in-place rename on the declaration row; avoids colliding with the suggested replacement).
+- After **Fix all**, optional removal of obsolete `@deprecated` exports when the editor’s reference provider reports a single self-reference and the tag suggests a simple identifier.
+- Full-workspace scan queueing, progress in the UI, and optional worker-based `createProgram` per tsconfig group with heartbeat logging.
+- Settings: `deprecatedFinder.showScanSummary`, `deprecatedFinder.verboseLogging`; output channel **Deprecated Finder**.
+
+[1.0.0]: https://github.com/RafaelHDSV/Deprecated-Finder/releases
