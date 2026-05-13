@@ -5,6 +5,12 @@ All notable changes to the **Deprecated Finder** extension are documented in thi
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.3] - 2026-05-13
+
+### Fixed
+
+- README demo GIF: use absolute `https://github.com/RafaelHDSV/Deprecated-Finder/raw/main/media/demo.gif` (same `github.com/…/raw/…/` pattern as extensions like **vscode-css-peek**) so the animated preview loads on the **Visual Studio Marketplace** as well as on GitHub.
+
 ## [1.0.2] - 2026-05-13
 
 ### Changed
@@ -41,6 +47,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Full-workspace scan queueing, progress in the UI, and optional worker-based `createProgram` per tsconfig group with heartbeat logging.
 - Settings: `deprecatedFinder.showScanSummary`, `deprecatedFinder.verboseLogging`; output channel **Deprecated Finder**.
 
+[1.0.3]: https://github.com/RafaelHDSV/Deprecated-Finder/releases
 [1.0.2]: https://github.com/RafaelHDSV/Deprecated-Finder/releases
 [1.0.1]: https://github.com/RafaelHDSV/Deprecated-Finder/releases
 [1.0.0]: https://github.com/RafaelHDSV/Deprecated-Finder/releases

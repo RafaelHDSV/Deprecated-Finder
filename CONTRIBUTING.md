@@ -15,7 +15,7 @@ See the [README](README.md) **Development** section for watch mode, the Extensio
 
 **Marketplace icon:** `package.json` uses `media/icon.png` (128×128), rasterized from `media/icon.svg` via `npm run icon:rasterize` (devDependency `sharp`).
 
-**README demo:** `media/demo.gif` is built from `demo.mp4` with `npm run demo:gif` (devDependency `ffmpeg-static`). Regenerate after re-recording the video.
+**README demo:** commit `media/demo.gif` and reference it in the README with an absolute URL: `https://github.com/<owner>/<repo>/raw/<branch>/media/demo.gif` (same pattern as [vscode-css-peek](https://github.com/pranaygp/vscode-css-peek#readme)) so the **Marketplace** preview resolves. Relative `./media/demo.gif` works on GitHub but often **not** in the store. Regenerate with `npm run demo:gif` after re-recording `demo.mp4`.
 
 ## Webview `postMessage` contract
 
