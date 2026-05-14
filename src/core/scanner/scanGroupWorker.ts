@@ -1,6 +1,6 @@
-import { parentPort, workerData } from 'worker_threads'
 import * as path from 'path'
 import * as ts from 'typescript'
+import { parentPort, workerData } from 'worker_threads'
 import type { DeprecatedItem } from '../model/DeprecatedItem'
 import { normalizePathForComparison } from '../util/pathComparison'
 import { scanFileForDeprecated } from './tsDeprecatedScanner'
@@ -73,8 +73,8 @@ function run(): void {
       const chunk = pathChunks[ci]
       const chunkLabel =
         chunkCount > 1
-          ? `TypeScript program ${ci + 1}/${chunkCount} (${chunk.length} root files)`
-          : `TypeScript program (${chunk.length} root files)`
+          ? `Program ${ci + 1}/${chunkCount} (${chunk.length} root files)`
+          : `Program (${chunk.length} root files)`
 
       port.postMessage({
         type: 'progress',

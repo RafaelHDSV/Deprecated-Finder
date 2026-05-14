@@ -326,8 +326,8 @@ function collectFromProgramsChunked(
     const chunk = pathChunks[ci]
     const chunkLabel =
       chunkCount > 1
-        ? `TypeScript program ${ci + 1}/${chunkCount} (${chunk.length} root files)`
-        : `TypeScript program (${chunk.length} root files)`
+        ? `Program ${ci + 1}/${chunkCount} (${chunk.length} root files)`
+        : `Program (${chunk.length} root files)`
 
     onProgress?.({
       kind: 'indeterminate',
