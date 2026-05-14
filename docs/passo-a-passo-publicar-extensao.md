@@ -49,7 +49,7 @@ Revisa antes de publicar:
 
 - `version` em `package.json` (semver).
 - `displayName`, `description`, `repository`, `license`, `engines.vscode`.
-- `README.md` na raiz (o Marketplace mostra-o na página da extensão). **GIF / imagens no README:** usa URL absoluta estilo `https://github.com/OWNER/REPO/raw/BRANCH/path/to.gif` (como no [vscode-css-peek](https://github.com/pranaygp/vscode-css-peek)) — **não** uses só `./media/...`, senão o preview na loja pode falhar. Regenera o GIF com `npm run demo:gif` após alterar `demo.mp4`.
+- `README.md` na raiz (o Marketplace mostra-o na página da extensão). **GIF / imagens no README:** o crawler do Marketplace **não** envia credenciais GitHub. Se o repositório for **privado**, URLs `https://github.com/OWNER/REPO/raw/BRANCH/...` ou `raw.githubusercontent.com/...` devolvem **404** para visitantes anónimos — o preview na loja fica em branco (só o texto do `alt`). Neste projeto o GIF usa **`https://cdn.jsdelivr.net/npm/deprecated-finder@latest/media/demo.gif`** (ficheiro incluído no pacote **npm** público). **Antes do primeiro `vsce publish` com esse README**, publica o pacote no npm (uma vez por versão que altere o GIF): `npm publish` (com login `npm login`). Alternativa: tornar o repositório **público** e voltar ao padrão estilo [vscode-css-peek](https://github.com/pranaygp/vscode-css-peek) (`https://github.com/OWNER/REPO/raw/BRANCH/path.gif`). Regenera o GIF com `npm run demo:gif` após alterar `demo.mp4`.
 - `CHANGELOG.md` na raiz (recomendado pelo Marketplace; mantém o histórico de versões).
 - **`icon` na raiz do `package.json`**: ficheiro **PNG ≥ 128×128** (ex. `media/icon.png`); o ícone da **activity bar** pode continuar em SVG em `contributes`, mas o **tile** do Marketplace usa o `icon` PNG.
 
@@ -109,6 +109,17 @@ Gera algo como `deprecated-finder-0.1.0.vsix` na raiz. Podes instalar em VS Code
 
 ---
 
+## 4b. Publicar no npm (GIF do README na loja via jsDelivr)
+
+O `README.md` usa `https://cdn.jsdelivr.net/npm/deprecated-finder@latest/media/demo.gif`. O jsDelivr lê o tarball **público** do npm, por isso tens de publicar o pacote npm **quando mudares o GIF** ou na **primeira** vez com este README — **antes** (ou imediatamente antes) de `vsce publish`, para o CDN já ter o ficheiro.
+
+1. Conta em [npmjs.com](https://www.npmjs.com/) e `npm login` na máquina.
+2. Na raiz do projeto: `npm ci`, `npm run compile`, `npm publish` (o `prepublishOnly` corre o compile outra vez).
+
+Se o nome `deprecated-finder` já estiver ocupado por outro autor, escolhe outro arranjo (repo público + URL GitHub raw, ou `--baseImagesUrl` no `vsce` para um CDN teu).
+
+---
+
 ## Alternativa: publicar apenas com o `.vsix` pelo site do Marketplace
 
 Se o objetivo é **só colocar a extensão no Marketplace** sem configurar PAT / `vsce login` na máquina:
@@ -122,6 +133,8 @@ Assim publicas **só com login web**; para automatizar (CI ou `vsce publish` na 
 ---
 
 ## 5. Publicar no Visual Studio Marketplace
+
+Se o README usa o GIF via **jsDelivr** (`npm`), corre **`npm publish`** (secção [4b](#4b-publicar-no-npm-gif-do-readme-na-loja-via-jsdelivr)) **antes** de `vsce publish`, para o CDN já servir `media/demo.gif`.
 
 Com o mesmo `VSCE_PAT` e já autenticado:
 
@@ -162,6 +175,7 @@ npx @vscode/vsce publish
 | PAT com scope Marketplace (Manage) **ou** upload `.vsix` no site | [ ] |
 | `vsce login <publisher>` (só se usares `vsce publish` na CLI) | [ ] |
 | `vsce package` e teste do `.vsix` | [ ] |
+| `npm publish` (GIF README / jsDelivr, quando aplicável) | [ ] |
 | `vsce publish` | [ ] |
 | Verificação na página do Marketplace | [ ] |
 

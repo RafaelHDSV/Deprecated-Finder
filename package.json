@@ -2,7 +2,7 @@
   "name": "deprecated-finder",
   "displayName": "Deprecated Finder",
   "description": "Find @deprecated symbols across your workspace and apply vendor-suggested replacements with one click.",
-  "version": "1.0.3",
+  "version": "1.0.4",
   "publisher": "RafaelVieira1720",
   "license": "MIT",
   "icon": "media/icon.png",
@@ -29,6 +29,10 @@
     "react"
   ],
   "main": "./out/extension.js",
+  "files": [
+    "out/**/*.js",
+    "media"
+  ],
   "activationEvents": [
     "onStartupFinished"
   ],
@@ -118,6 +122,7 @@
     }
   },
   "scripts": {
+    "prepublishOnly": "npm run compile",
     "vscode:prepublish": "npm run compile",
     "compile": "tsc -p ./",
     "lint": "eslint",

@@ -1,0 +1,3 @@
+# Keep npm tarballs small; `files` in package.json already allowlists `out` and `media`.
+out/test/**
+**/*.map

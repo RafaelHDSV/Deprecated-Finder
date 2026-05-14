@@ -7,13 +7,13 @@ VS Code / Cursor extension that scans your workspace for `@deprecated` symbols, 
 <p align="center">
   <a href="https://github.com/RafaelHDSV/Deprecated-Finder/blob/main/demo.mp4" title="Full demo (MP4, with audio)">
     <img
-      src="https://github.com/RafaelHDSV/Deprecated-Finder/raw/main/media/demo.gif"
+      src="https://cdn.jsdelivr.net/npm/deprecated-finder@latest/media/demo.gif"
       alt="Deprecated Finder — workspace scan, deprecated list, Fix and Fix all"
       width="800"
     />
   </a>
   <br />
-  <sub>Animated GIF uses the same <code>github.com/…/raw/…/</code> URL style as <a href="https://github.com/pranaygp/vscode-css-peek">vscode-css-peek</a> so previews work on GitHub and the Marketplace. For HD + audio, open the MP4 link above.</sub>
+  <sub>Animated GIF. For HD + audio, open the MP4 link above (GitHub).</sub>
 </p>
 
 ## What it does
