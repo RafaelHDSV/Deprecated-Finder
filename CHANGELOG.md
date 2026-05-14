@@ -5,6 +5,15 @@ All notable changes to the **Deprecated Finder** extension are documented in thi
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.8] - 2026-05-14
+
+### Fixed
+
+- **Worker stability:** Improved worker implementation and message handling for group program scans.
+- **Code organization:** Refactored code to improve maintainability and reduce redundancy across chunked program scans.
+- **Internal consistency:** Aligned sync and async fallback scan chunking to ensure consistent behavior between legacy and worker-based scanners.
+
+
 ## [1.0.7] - 2026-05-14
 
 ### Fixed
