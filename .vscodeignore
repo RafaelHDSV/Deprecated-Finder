@@ -1,0 +1,24 @@
+.vscode/**
+.vscode-test/**
+out/test/**
+out/**/*.map
+src/**
+.gitignore
+tsconfig.json
+vsc-extension-quickstart.md
+
+# Dev / docs (not needed at runtime)
+.cursor/**
+.issues/**
+docs/**
+scripts/**
+.github/**
+eslint.config.mjs
+CONTRIBUTING.md
+versions/**
+*.vsix
+
+# Demo source — do not ship 70+ MB MP4 inside the extension; README links to GitHub raw instead
+demo.mp4
+
+node_modules/**

@@ -7,7 +7,7 @@ Guia prático para gerar o `.vsix` localmente e publicar no **Visual Studio Mark
 ## Pré-requisitos
 
 1. **Conta Microsoft** ligada ao [Visual Studio Marketplace](https://marketplace.visualstudio.com/).
-2. **Publisher** no Marketplace: cria em [Manage Publishers](https://marketplace.visualstudio.com/manage) se ainda não existir. O `publisher` em `package.json` tem de **coincidir** com o ID do publisher (hoje está `rafael` — altera se o teu for outro).
+2. **Publisher** no Marketplace: cria em [Manage Publishers](https://marketplace.visualstudio.com/manage) se ainda não existir. O `publisher` em `package.json` tem de **coincidir** com o ID do publisher (hoje está `RafaelVieira1720` — altera se o teu for outro).
 3. **Personal Access Token (PAT)** com permissão **Marketplace (Manage)** — o token **não** se cria no site do Marketplace; cria-se no **Azure DevOps** (conta Microsoft igual à do Marketplace). Vê a secção **[Azure DevOps e token (PAT)](#azure-devops-e-token-pat)** abaixo e, se não quiseres usar a CLI, **[Publicar só com o .vsix pelo site](#alternativa-publicar-apenas-com-o-vsix-pelo-site-do-marketplace)**.
 
 4. **Node.js** e **npm** instalados (versão alinhada ao que usas no CI / no projeto).
@@ -44,13 +44,13 @@ npm run lint
 ```
 
 - O script `vscode:prepublish` em `package.json` já corre `npm run compile` antes de empacotar com a ferramenta oficial — útil para não publicar sem build.
-- **`vsce` e `package.json` → `files`:** não podes usar **`.vscodeignore` e `"files"` ao mesmo tempo** — o `vsce` aborta. Este projeto usa só **`"files"`** (allowlist) para o VSIX e para o tarball npm.
+- Empacotamento: **`.vscodeignore`** na raiz (padrão VS Code). **Não** combinar `.vscodeignore` com **`"files"`** em `package.json` — o `vsce` aborta nesse caso.
 
 Revisa antes de publicar:
 
 - `version` em `package.json` (semver).
 - `displayName`, `description`, `repository`, `license`, `engines.vscode`.
-- `README.md` na raiz (o Marketplace mostra-o na página da extensão). **GIF / imagens no README:** o crawler do Marketplace **não** envia credenciais GitHub. Se o repositório for **privado**, URLs `https://github.com/OWNER/REPO/raw/BRANCH/...` ou `raw.githubusercontent.com/...` devolvem **404** para visitantes anónimos — o preview na loja fica em branco (só o texto do `alt`). Neste projeto o GIF usa **`https://cdn.jsdelivr.net/npm/deprecated-finder@latest/media/demo.gif`** (ficheiro incluído no pacote **npm** público). **Antes do primeiro `vsce publish` com esse README**, publica o pacote no npm (uma vez por versão que altere o GIF): `npm publish` (com login `npm login`). Alternativa: tornar o repositório **público** e voltar ao padrão estilo [vscode-css-peek](https://github.com/pranaygp/vscode-css-peek) (`https://github.com/OWNER/REPO/raw/BRANCH/path.gif`). Regenera o GIF com `npm run demo:gif` após alterar `demo.mp4`.
+- `README.md` na raiz (o Marketplace mostra-o na página da extensão). **GIF / imagens / links para vídeo:** usa URLs absolutas **`https://raw.githubusercontent.com/OWNER/REPO/BRANCH/caminho`** (igual ao [Theme Switcher](https://github.com/savioserra/vs-theme-switcher#readme) e à [página no Marketplace](https://marketplace.visualstudio.com/items?itemName=savioserra.theme-switcher)). O repositório tem de estar **público** para o crawler da loja e visitantes anónimos conseguirem carregar esses ficheiros. Regenera o GIF com `npm run demo:gif` após alterar `demo.mp4`.
 - `CHANGELOG.md` na raiz (recomendado pelo Marketplace; mantém o histórico de versões).
 - **`icon` na raiz do `package.json`**: ficheiro **PNG ≥ 128×128** (ex. `media/icon.png`); o ícone da **activity bar** pode continuar em SVG em `contributes`, mas o **tile** do Marketplace usa o `icon` PNG.
 
@@ -89,10 +89,10 @@ export VSCE_PAT="cole_aqui_o_pat"
 Faz login (segue as instruções na consola):
 
 ```bash
-npx @vscode/vsce login rafael
+npx @vscode/vsce login RafaelVieira1720
 ```
 
-Substitui `rafael` pelo **ID exato** do teu publisher no Marketplace.
+Substitui `RafaelVieira1720` pelo **ID exato** do teu publisher no Marketplace.
 
 ---
 
@@ -110,17 +110,6 @@ Gera algo como `deprecated-finder-0.1.0.vsix` na raiz. Podes instalar em VS Code
 
 ---
 
-## 4b. Publicar no npm (GIF do README na loja via jsDelivr)
-
-O `README.md` usa `https://cdn.jsdelivr.net/npm/deprecated-finder@latest/media/demo.gif`. O jsDelivr lê o tarball **público** do npm, por isso tens de publicar o pacote npm **quando mudares o GIF** ou na **primeira** vez com este README — **antes** (ou imediatamente antes) de `vsce publish`, para o CDN já ter o ficheiro.
-
-1. Conta em [npmjs.com](https://www.npmjs.com/) e `npm login` na máquina.
-2. Na raiz do projeto: `npm ci`, `npm run compile`, `npm publish` (o `prepublishOnly` corre o compile outra vez).
-
-Se o nome `deprecated-finder` já estiver ocupado por outro autor, escolhe outro arranjo (repo público + URL GitHub raw, ou `--baseImagesUrl` no `vsce` para um CDN teu).
-
----
-
 ## Alternativa: publicar apenas com o `.vsix` pelo site do Marketplace
 
 Se o objetivo é **só colocar a extensão no Marketplace** sem configurar PAT / `vsce login` na máquina:
@@ -134,8 +123,6 @@ Assim publicas **só com login web**; para automatizar (CI ou `vsce publish` na 
 ---
 
 ## 5. Publicar no Visual Studio Marketplace
-
-Se o README usa o GIF via **jsDelivr** (`npm`), corre **`npm publish`** (secção [4b](#4b-publicar-no-npm-gif-do-readme-na-loja-via-jsdelivr)) **antes** de `vsce publish`, para o CDN já servir `media/demo.gif`.
 
 Com o mesmo `VSCE_PAT` e já autenticado:
 
@@ -176,7 +163,6 @@ npx @vscode/vsce publish
 | PAT com scope Marketplace (Manage) **ou** upload `.vsix` no site | [ ] |
 | `vsce login <publisher>` (só se usares `vsce publish` na CLI) | [ ] |
 | `vsce package` e teste do `.vsix` | [ ] |
-| `npm publish` (GIF README / jsDelivr, quando aplicável) | [ ] |
 | `vsce publish` | [ ] |
 | Verificação na página do Marketplace | [ ] |
 

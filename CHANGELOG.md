@@ -5,6 +5,14 @@ All notable changes to the **Deprecated Finder** extension are documented in thi
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.5] - 2026-05-14
+
+### Changed
+
+- README demo media: **Theme Switcher**–style absolute URLs on **`raw.githubusercontent.com`** for `media/demo.gif` and links for `demo.mp4`; removed jsDelivr / `npm publish` workaround.
+- Packaging: restored **`.vscodeignore`** and removed **`package.json` `"files"`** / **`prepublishOnly`** so `vsce package` matches typical VS Code extensions (no `files` + `.vscodeignore` conflict).
+- **`.vscodeignore`:** exclude `demo.mp4`, `.cursor/`, `.issues/`, `docs/`, `scripts/`, etc., so the VSIX does not bundle dev assets or the 70+ MB source recording (README still links to the MP4 on GitHub).
+
 ## [1.0.4] - 2026-05-13
 
 ### Fixed

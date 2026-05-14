@@ -15,7 +15,7 @@ See the [README](README.md) **Development** section for watch mode, the Extensio
 
 **Marketplace icon:** `package.json` uses `media/icon.png` (128×128), rasterized from `media/icon.svg` via `npm run icon:rasterize` (devDependency `sharp`).
 
-**README demo:** commit `media/demo.gif` and reference it in the README. For the **Marketplace** crawler (no GitHub login), a **private** GitHub repo makes `raw.githubusercontent.com` / `github.com/.../raw/...` URLs return **404** — use a **public** URL instead. This repo uses **`https://cdn.jsdelivr.net/npm/deprecated-finder@latest/media/demo.gif`** (GIF shipped in the public **npm** tarball; run **`npm publish`** before or with each Marketplace release that changes the GIF). If the GitHub repo is **public**, the vscode-css-peek style `https://github.com/<owner>/<repo>/raw/<branch>/media/demo.gif` also works. Relative `./media/demo.gif` works when browsing GitHub while logged in, but `vsce` rewrites relative image links for the store using the `repository` URL, which still fails for private repos. Regenerate with `npm run demo:gif` after re-recording `demo.mp4`.
+**README demo:** commit `media/demo.gif` and reference it with absolute URLs like `https://raw.githubusercontent.com/<owner>/<repo>/<branch>/media/demo.gif` (same approach as [Theme Switcher](https://github.com/savioserra/vs-theme-switcher#readme)). The GitHub repository must be **public** so the Marketplace and anonymous users can fetch those assets. Regenerate with `npm run demo:gif` after re-recording `demo.mp4`.
 
 ## Webview `postMessage` contract
 
