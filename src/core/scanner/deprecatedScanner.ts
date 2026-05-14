@@ -291,26 +291,78 @@ function cloneCompilerOptionsForWorker(
   return JSON.parse(JSON.stringify(options)) as ts.CompilerOptions
 }
 
+/** Same chunk size as `scanGroupWorker.ts` — keeps sync fallback behaviour aligned. */
+const ROOT_SCAN_CHUNK_SIZE = 40
+
+function chunkRootPaths(paths: string[], size: number): string[][] {
+  const out: string[][] = []
+  for (let i = 0; i < paths.length; i += size) {
+    out.push(paths.slice(i, i + size))
+  }
+  return out
+}
+
 /**
- * Walks explicit workspace paths (not `program.getSourceFiles()`), so the
- * first progress tick happens as soon as real analysis starts — otherwise
- * thousands of `node_modules` entries can delay the counter and leave the
- * UI stuck at 0 / N during heavy `createProgram` work.
+ * Walks explicit workspace paths in **chunks** of roots (multiple smaller
+ * `createProgram` calls). One giant program for hundreds of roots can stall
+ * the UI for minutes; chunking matches the worker strategy.
  */
-function collectFromProgramWithProgress(
-  program: ts.Program,
+function collectFromProgramsChunked(
   pathsInGroup: string[],
+  compilerOptions: ts.CompilerOptions,
   onProgress: ProgressCallback | undefined,
   progress: { current: number; total: number },
   narrative: ScanNarrative
 ): DeprecatedItem[] {
   const map = new Map<string, DeprecatedItem>()
-  const determinatePrefix =
-    narrative === 'post-fix' ? 'Re-scanning workspace' : undefined
+  const postFix = narrative === 'post-fix'
+  const determinatePrefix = postFix ? 'Re-scanning workspace' : undefined
+  const scanStarted = Date.now()
+  const elapsedSec = () => Math.floor((Date.now() - scanStarted) / 1000)
+  const pathChunks = chunkRootPaths(pathsInGroup, ROOT_SCAN_CHUNK_SIZE)
+  const chunkCount = pathChunks.length
 
-  for (const fp of pathsInGroup) {
-    const sourceFile = getSourceFileForPath(program, fp)
-    if (!sourceFile || sourceFile.fileName.includes('node_modules')) {
+  for (let ci = 0; ci < pathChunks.length; ci++) {
+    const chunk = pathChunks[ci]
+    const chunkLabel =
+      chunkCount > 1
+        ? `TypeScript program ${ci + 1}/${chunkCount} (${chunk.length} root files)`
+        : `TypeScript program (${chunk.length} root files)`
+
+    onProgress?.({
+      kind: 'indeterminate',
+      message: postFix
+        ? `Re-scanning workspace: ${chunkLabel} — compiling (${elapsedSec()}s elapsed)…`
+        : `Building ${chunkLabel} — compiling (${elapsedSec()}s elapsed)…`,
+      fileCount: pathsInGroup.length
+    })
+
+    const program = ts.createProgram(chunk, compilerOptions)
+
+    for (const fp of chunk) {
+      const sourceFile = getSourceFileForPath(program, fp)
+      const short = path.basename(fp)
+
+      if (!sourceFile || sourceFile.fileName.includes('node_modules')) {
+        progress.current++
+        onProgress?.({
+          kind: 'determinate',
+          current: Math.min(progress.current, progress.total),
+          total: progress.total,
+          statusText:
+            determinatePrefix !== undefined
+              ? `${determinatePrefix}: ${Math.min(progress.current, progress.total)} / ${progress.total} (${elapsedSec()}s) — ${short}`
+              : `Scanning ${Math.min(progress.current, progress.total)} / ${progress.total} (${elapsedSec()}s) — ${short}`
+        })
+        continue
+      }
+
+      const fileName = sourceFile.fileName
+      const items = scanFileForDeprecated(fileName, program, sourceFile)
+      for (const item of items) {
+        map.set(item.id, item)
+      }
+
       progress.current++
       onProgress?.({
         kind: 'determinate',
@@ -318,28 +370,10 @@ function collectFromProgramWithProgress(
         total: progress.total,
         statusText:
           determinatePrefix !== undefined
-            ? `${determinatePrefix}: ${Math.min(progress.current, progress.total)} / ${progress.total} files…`
-            : undefined
+            ? `${determinatePrefix}: ${Math.min(progress.current, progress.total)} / ${progress.total} (${elapsedSec()}s) — ${short}`
+            : `Scanning ${Math.min(progress.current, progress.total)} / ${progress.total} (${elapsedSec()}s) — ${short}`
       })
-      continue
     }
-
-    const fileName = sourceFile.fileName
-    const items = scanFileForDeprecated(fileName, program, sourceFile)
-    for (const item of items) {
-      map.set(item.id, item)
-    }
-
-    progress.current++
-    onProgress?.({
-      kind: 'determinate',
-      current: Math.min(progress.current, progress.total),
-      total: progress.total,
-      statusText:
-        determinatePrefix !== undefined
-          ? `${determinatePrefix}: ${Math.min(progress.current, progress.total)} / ${progress.total} files…`
-          : undefined
-    })
   }
 
   return Array.from(map.values())
@@ -439,7 +473,7 @@ async function runFullWorkspaceScan(
 
       reportProgress({
         kind: 'indeterminate',
-        message: `${baseBuildingMessage} (${paths.length} root file(s) in this group; compilation may take several minutes. Elapsed seconds update every second until file-by-file analysis starts.)`,
+        message: `${baseBuildingMessage} (${paths.length} root file(s) in this group; compiles in batches of ${ROOT_SCAN_CHUNK_SIZE} roots. Elapsed seconds update every second during each batch.)`,
         fileCount: paths.length
       })
 
@@ -465,7 +499,7 @@ async function runFullWorkspaceScan(
       try {
         const heartbeat = (elapsedSec: number): ScanProgressMessage => ({
           kind: 'indeterminate',
-          message: `${baseBuildingMessage} ${elapsedSec}s elapsed — compiling root file(s) in a background worker. Please wait until the progress bar is updated.`,
+          message: `${baseBuildingMessage} ${elapsedSec}s elapsed — compiling a batch in the background worker (max ${ROOT_SCAN_CHUNK_SIZE} roots per program). The bar advances after each file is analyzed.`,
           fileCount: paths.length
         })
         const { items: workerItems, progressCurrent } =
@@ -484,10 +518,9 @@ async function runFullWorkspaceScan(
       } catch (err) {
         logWorkerFallback(err instanceof Error ? err.message : String(err))
         await yieldToEventLoop()
-        const program = ts.createProgram(paths, compilerOptions)
-        chunk = collectFromProgramWithProgress(
-          program,
+        chunk = collectFromProgramsChunked(
           paths,
+          compilerOptions,
           reportProgress,
           progress,
           narrative

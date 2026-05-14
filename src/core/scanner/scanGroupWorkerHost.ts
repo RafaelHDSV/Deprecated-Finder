@@ -10,7 +10,7 @@ const WORKER_SCRIPT = 'scanGroupWorker.js'
 type WorkerFromChild =
   | {
       type: 'progress'
-      update: Extract<ScanProgressMessage, { kind: 'determinate' }>
+      update: ScanProgressMessage
     }
   | { type: 'done'; items: DeprecatedItem[]; progressCurrent: number }
   | { type: 'error'; message: string }
@@ -50,15 +50,24 @@ export function collectProgramGroupInWorker(
       fn()
     }
 
-    heartbeat = setInterval(() => {
-      const elapsedSec = Math.floor((Date.now() - startedAt) / 1000)
-      reportProgress(heartbeatMessage(elapsedSec))
-    }, 1000)
+    const startHeartbeat = () => {
+      stopHeartbeat()
+      heartbeat = setInterval(() => {
+        const elapsedSec = Math.floor((Date.now() - startedAt) / 1000)
+        reportProgress(heartbeatMessage(elapsedSec))
+      }, 1000)
+    }
+
+    startHeartbeat()
 
     worker.on('message', (msg: WorkerFromChild) => {
       if (msg.type === 'progress') {
-        stopHeartbeat()
         reportProgress(msg.update)
+        if (msg.update.kind === 'indeterminate') {
+          startHeartbeat()
+        } else {
+          stopHeartbeat()
+        }
         return
       }
       if (msg.type === 'done') {

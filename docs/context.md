@@ -21,7 +21,7 @@ Issue de origem: `.issues/github/ISSUE-001-deprecated-finder.md`.
 - **npm** como gerenciador oficial (`package-lock.json`; CI com `npm ci`)
 - Configurações `deprecatedFinder.showScanSummary` e `deprecatedFinder.verboseLogging` (`package.json` → Settings); diagnóstico verboso e avisos do scan no painel **Output → Deprecated Finder**
 - Durante `scanForDeprecated`, saves disparam `scanSingleFile` em modo **fila + flush** (sem `updateFile` intermédio) — ver `context.md` fluxo e README **Scan behavior**
-- Pedidos de scan global: **fila** (`fullWorkspaceScanTurn`); **epoch** (`scanRequestSerial`) para `set`/toast/progress; **worker** `scanGroupWorker` por grupo tsconfig com **heartbeat** (segundos decorridos) no host enquanto `createProgram` corre fora do thread da extensão; *fallback* síncrono se o worker falhar (log em Output)
+- Pedidos de scan global: **fila** (`fullWorkspaceScanTurn`); **epoch** (`scanRequestSerial`) para `set`/toast/progress; **worker** `scanGroupWorker` por grupo tsconfig: `createProgram` corre em **lotes** de roots (40 por defeito) para evitar um unico programa gigante; **heartbeat** no host (segundos decorridos) e **reinicia** em cada mensagem `indeterminate` do worker (entre lotes volta a compilar); *fallback* síncrono com o mesmo chunking se o worker falhar (log em Output)
 - **Fix all** na sidebar / painel tabular: respeita a **pesquisa** (só itens visíveis com `suggestion`); mensagem `fixAll` com `itemIds` (máx. `MAX_FIX_ALL_ITEM_IDS` em `webviewMessageValidation.ts`); comando de **paleta** sem args aplica a **lista completa** do store
 - Mensagens `postMessage` da webview (sidebar + painel) validadas em `src/webview/webviewMessageValidation.ts`; payloads inválidos ignorados (log `[webview]` só com `verboseLogging`)
 - TypeScript (`commonjs`, target ES2020)
@@ -114,8 +114,8 @@ Comandos com **Não** em «Visível na palette» usam `when: false` em `package.
 
 ## Progresso na varredura
 
-- Fase **indeterminada** ao localizar ficheiros e ao preparar cada grupo: mensagem com **número de ficheiros raiz** do grupo; durante `createProgram` no **worker**, o host envia atualização a cada segundo com **tempo decorrido** até começar a análise ficheiro a ficheiro.
-- Fase **determinada** (`Analyzing i / N` ou texto *post-fix*) durante o passe que lê cada ficheiro do grupo (no worker ou síncrono em *fallback*).
+- Fase **indeterminada** ao localizar ficheiros e ao preparar cada grupo: mensagem com **número de ficheiros raiz** e texto a explicar **lotes de compilação**; durante cada `createProgram` no **worker**, o host envia atualização a cada segundo com **tempo decorrido**; entre lotes o worker envia outro `indeterminate` e o host **religa** o heartbeat para o próximo `createProgram`.
+- Fase **determinada** durante o passe ficheiro a ficheiro: barra de percentagem; `statusText` inclui **segundos decorridos** e **basename** do ficheiro (default e *post-fix*).
 
 ## Limitações conhecidas (v0.1)
 
