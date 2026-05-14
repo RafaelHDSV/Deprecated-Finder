@@ -90,7 +90,9 @@ const FALLBACK_OPTIONS: ts.CompilerOptions = {
   esModuleInterop: true,
   allowSyntheticDefaultImports: true,
   skipLibCheck: true,
-  noEmit: true
+  noEmit: true,
+  // Avoid deep node_modules/*.js crawl during createProgram (large installs).
+  maxNodeModuleJsDepth: 0
 }
 
 /** `normalize(root tsconfig path)` → expanded parse result */
@@ -273,7 +275,9 @@ function buildScanCompilerOptions(
     declaration: false,
     declarationMap: false,
     composite: false,
-    incremental: false
+    incremental: false,
+    // Same intent as FALLBACK_OPTIONS.maxNodeModuleJsDepth — override parsed tsconfig if set higher.
+    maxNodeModuleJsDepth: 0
   }
 }
 
@@ -538,26 +542,20 @@ export async function scanSingleFile(
     return []
   }
 
-  const files = await scanWorkspaceFiles()
-  if (files.length === 0) {
+  if (!vscode.workspace.workspaceFolders?.length) {
     return []
   }
 
-  const allPaths = files.map((f) => f.fsPath)
-  const groupKey = configGroupKeyForFile(filePath)
-  const groupPaths = allPaths.filter(
-    (p) => configGroupKeyForFile(p) === groupKey
-  )
-
-  const expanded =
-    groupKey === '__no_tsconfig__'
-      ? undefined
-      : getExpandedForSourceFile(filePath)
+  const expanded = getExpandedForSourceFile(filePath)
   const options = expanded
     ? buildScanCompilerOptions(expanded.parsed)
     : FALLBACK_OPTIONS
 
-  const freshProgram = ts.createProgram(groupPaths, options)
+  // Single-file program: building one `Program` per save with *every* file in the
+  // tsconfig group repeated `createProgram` for the whole graph (154+ roots →
+  // minutes on large `node_modules`). One root still pulls imported `.d.ts` for
+  // correct checker behavior for this file.
+  const freshProgram = ts.createProgram([filePath], options)
 
   const sourceFile = getSourceFileForPath(freshProgram, filePath)
   if (!sourceFile) {
