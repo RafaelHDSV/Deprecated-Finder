@@ -150,7 +150,7 @@ npx @vscode/vsce publish
 
 1. Abre a página da extensão no Marketplace e confirma README, ícone e descrição.
 2. Testa **Install** a partir do Marketplace num perfil limpo ou segunda máquina.
-3. Se usares **Open VSX** (VSCodium, etc.), o fluxo é outro (`npx ovsx publish` com token Open VSX) — só inclui este passo se quiseres suportar esse ecossistema.
+3. **Cursor** (e VSCodium, Gitpod, etc.) usa o catálogo **[Open VSX](https://open-vsx.org/)** na pesquisa de extensões — **não** o Marketplace da Microsoft. Para a extensão aparecer na loja **dentro do Cursor** sem VSIX manual, publica também com `npx ovsx publish` (token: [open-vsx.org — Personal access tokens](https://open-vsx.org/user-settings/tokens); guia: [Publishing extensions](https://github.com/eclipse/openvsx/wiki/Publishing-Extensions)). Usa o mesmo `publisher` e id (`publisher.name`) que no `vsce publish`.
 
 ---
 
