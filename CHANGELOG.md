@@ -5,6 +5,12 @@ All notable changes to the **Deprecated Finder** extension are documented in thi
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.6] - 2026-05-14
+
+### Fixed
+
+- **Activation failure** (`Cannot find module 'typescript'`) and extension host hang: **`.vscodeignore` must not exclude `node_modules`** for this project — `typescript` is a runtime `dependency` and must ship inside the VSIX. Do **not** package with `vsce package --no-dependencies` (that skips bundling dependencies).
+
 ## [1.0.5] - 2026-05-14
 
 ### Changed

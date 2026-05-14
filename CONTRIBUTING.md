@@ -15,6 +15,8 @@ See the [README](README.md) **Development** section for watch mode, the Extensio
 
 **Marketplace icon:** `package.json` uses `media/icon.png` (128×128), rasterized from `media/icon.svg` via `npm run icon:rasterize` (devDependency `sharp`).
 
+**VSIX packaging:** do not add `node_modules/**` to `.vscodeignore` — `typescript` is a runtime dependency and must be included in the published package. Do not run `vsce package --no-dependencies` for release builds.
+
 **README demo:** commit `media/demo.gif` and reference it with absolute URLs like `https://raw.githubusercontent.com/<owner>/<repo>/<branch>/media/demo.gif` (same approach as [Theme Switcher](https://github.com/savioserra/vs-theme-switcher#readme)). The GitHub repository must be **public** so the Marketplace and anonymous users can fetch those assets. Regenerate with `npm run demo:gif` after re-recording `demo.mp4`.
 
 ## Webview `postMessage` contract

@@ -21,4 +21,5 @@ versions/**
 # Demo source — do not ship 70+ MB MP4 inside the extension; README links to GitHub raw instead
 demo.mp4
 
-node_modules/**
+# Do NOT ignore node_modules: this extension requires the `typescript` runtime package (see package.json dependencies).
+# vsce only bundles production dependencies; devDependencies stay out of the VSIX when you use the default flow.

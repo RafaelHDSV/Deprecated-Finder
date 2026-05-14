@@ -44,7 +44,7 @@ npm run lint
 ```
 
 - O script `vscode:prepublish` em `package.json` já corre `npm run compile` antes de empacotar com a ferramenta oficial — útil para não publicar sem build.
-- Empacotamento: **`.vscodeignore`** na raiz (padrão VS Code). **Não** combinar `.vscodeignore` com **`"files"`** em `package.json` — o `vsce` aborta nesse caso.
+- Empacotamento: **`.vscodeignore`** na raiz (padrão VS Code). **Não** combinar `.vscodeignore` com **`"files"`** em `package.json` — o `vsce` aborta nesse caso. **Não** ignores `node_modules/**` — esta extensão precisa do pacote **`typescript`** em tempo de execução; sem ele no VSIX a ativação falha (`Cannot find module 'typescript'`). **Não** uses `vsce package --no-dependencies` ao gerar o `.vsix` para publicar.
 
 Revisa antes de publicar:
 
