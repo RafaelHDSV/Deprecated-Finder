@@ -9,11 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Packaging: `vsce` does not allow **both** `.vscodeignore` and `package.json` `"files"`. Removed `.vscodeignore` and kept an explicit `"files"` list (`out/**/*.js`, `media`, `README.md`, `CHANGELOG.md`, `LICENSE`) so `vsce package` / `publish` and `npm publish` agree.
 - README demo GIF on the **Visual Studio Marketplace**: point the `<img>` to `https://cdn.jsdelivr.net/npm/deprecated-finder@latest/media/demo.gif` so the preview loads for anonymous users. Raw `github.com/…/raw/…` URLs return **404** when the repository is **private**, which showed as a blank tile with only the image `alt` text.
 
 ### Added
 
-- `package.json` `"files"` (`out`, `media`) and `prepublishOnly` so you can run **`npm publish`** and ship `media/demo.gif` on the public npm registry for jsDelivr (see `docs/passo-a-passo-publicar-extensao.md`).
+- `package.json` `"files"` (single allowlist for **npm** and **vsce**), `prepublishOnly`, and **no** `.vscodeignore`, so **`npm publish`** (GIF on jsDelivr) and **`vsce package` / `publish`** do not conflict. See `docs/passo-a-passo-publicar-extensao.md`.
 
 ## [1.0.3] - 2026-05-13
 

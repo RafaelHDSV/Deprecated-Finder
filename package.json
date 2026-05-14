@@ -31,7 +31,10 @@
   "main": "./out/extension.js",
   "files": [
     "out/**/*.js",
-    "media"
+    "media",
+    "README.md",
+    "CHANGELOG.md",
+    "LICENSE"
   ],
   "activationEvents": [
     "onStartupFinished"

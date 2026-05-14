@@ -44,6 +44,7 @@ npm run lint
 ```
 
 - O script `vscode:prepublish` em `package.json` já corre `npm run compile` antes de empacotar com a ferramenta oficial — útil para não publicar sem build.
+- **`vsce` e `package.json` → `files`:** não podes usar **`.vscodeignore` e `"files"` ao mesmo tempo** — o `vsce` aborta. Este projeto usa só **`"files"`** (allowlist) para o VSIX e para o tarball npm.
 
 Revisa antes de publicar:
 
