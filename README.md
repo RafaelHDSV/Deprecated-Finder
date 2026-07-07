@@ -1,4 +1,3 @@
-[![GitHub](https://img.shields.io/badge/GitHub-Repository-181717?logo=github)](https://github.com/RafaelHDSV/Deprecated-Finder)
 [![Version](https://vsmarketplacebadges.dev/version/RafaelVieira1720.deprecated-finder.svg)](https://marketplace.visualstudio.com/items?itemName=RafaelVieira1720.deprecated-finder)
 [![Installs](https://vsmarketplacebadges.dev/installs/RafaelVieira1720.deprecated-finder.svg)](https://marketplace.visualstudio.com/items?itemName=RafaelVieira1720.deprecated-finder)
 [![Downloads](https://vsmarketplacebadges.dev/downloads/RafaelVieira1720.deprecated-finder.svg)](https://marketplace.visualstudio.com/items?itemName=RafaelVieira1720.deprecated-finder)
