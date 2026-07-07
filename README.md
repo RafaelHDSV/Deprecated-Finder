@@ -1,8 +1,8 @@
 [![GitHub](https://img.shields.io/badge/GitHub-Repository-181717?logo=github)](https://github.com/RafaelHDSV/Deprecated-Finder)
-[![VS Marketplace Version](https://img.shields.io/visual-studio-marketplace/v/RafaelVieira1720.deprecated-finder)](https://marketplace.visualstudio.com/items?itemName=RafaelVieira1720.deprecated-finder)
-[![VS Marketplace Downloads](https://img.shields.io/visual-studio-marketplace/i/RafaelVieira1720.deprecated-finder)](https://marketplace.visualstudio.com/items?itemName=RafaelVieira1720.deprecated-finder)
-[![VS Marketplace Rating](https://img.shields.io/visual-studio-marketplace/r/RafaelVieira1720.deprecated-finder)](https://marketplace.visualstudio.com/items?itemName=RafaelVieira1720.deprecated-finder)
-[![VS Marketplace Stars](https://img.shields.io/visual-studio-marketplace/stars/RafaelVieira1720.deprecated-finder)](https://marketplace.visualstudio.com/items?itemName=RafaelVieira1720.deprecated-finder)
+[![Version](https://vsmarketplacebadges.dev/version/RafaelVieira1720.deprecated-finder.svg)](https://marketplace.visualstudio.com/items?itemName=RafaelVieira1720.deprecated-finder)
+[![Installs](https://vsmarketplacebadges.dev/installs/RafaelVieira1720.deprecated-finder.svg)](https://marketplace.visualstudio.com/items?itemName=RafaelVieira1720.deprecated-finder)
+[![Downloads](https://vsmarketplacebadges.dev/downloads/RafaelVieira1720.deprecated-finder.svg)](https://marketplace.visualstudio.com/items?itemName=RafaelVieira1720.deprecated-finder)
+[![Rating](https://vsmarketplacebadges.dev/rating/RafaelVieira1720.deprecated-finder.svg)](https://marketplace.visualstudio.com/items?itemName=RafaelVieira1720.deprecated-finder)
 [![Open VSX Version](https://img.shields.io/open-vsx/v/RafaelVieira1720/deprecated-finder)](https://open-vsx.org/extension/RafaelVieira1720/deprecated-finder)
 [![Open VSX Downloads](https://img.shields.io/open-vsx/dt/RafaelVieira1720/deprecated-finder)](https://open-vsx.org/extension/RafaelVieira1720/deprecated-finder)
 
