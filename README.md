@@ -1,3 +1,5 @@
+![https://open-vsx.org/extension/RafaelVieira1720/deprecated-finder](https://img.shields.io/open-vsx/dt/RafaelVieira1720/deprecated-finder)
+
 # Deprecated Finder
 
 VS Code / Cursor extension that scans your workspace for `@deprecated` symbols, extracts the replacement suggested by the library author (right from the JSDoc), and lets you fix every occurrence — individually or in bulk — with a single click.
